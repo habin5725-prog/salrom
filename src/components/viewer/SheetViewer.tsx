@@ -34,7 +34,11 @@ import { useAnnotations } from "./useAnnotations";
 import { usePinchZoom } from "./usePinchZoom";
 import { useWakeLock } from "./useWakeLock";
 
-type Props = ViewerData & { userId: string; canWriteGlobal: boolean };
+type Props = ViewerData & {
+  /** 리더/총 관리자 공용 계정 ID. 방문자는 null(개인 필기는 이 기기에만 저장) */
+  userId: string | null;
+  canWriteGlobal: boolean;
+};
 
 type LoadState =
   | { status: "loading" }
@@ -146,7 +150,7 @@ export function SheetViewer(props: Props) {
       id: crypto.randomUUID(),
       sheetId: sheet!.sheetId,
       sheetVersion: sheet!.version,
-      userId: props.userId,
+      userId: scope === "global" && props.userId ? props.userId : "this-device",
       page,
       scope,
       updatedAt: new Date().toISOString(),
@@ -406,7 +410,7 @@ function Toolbar({
             onClick={() => onScope("personal")}
             className={`min-h-11 rounded-xl font-semibold ${scope === "personal" ? "bg-surface text-personal shadow-sm" : "text-muted"}`}
           >
-            내 필기(나만 보기)
+            내 필기(이 기기)
           </button>
           <button
             type="button"
@@ -420,7 +424,7 @@ function Toolbar({
         </div>
       ) : (
         <p className="mb-1 text-center text-[0.9rem] text-muted">
-          <span className="font-semibold text-personal">파란색</span> 나만 보기 ·{" "}
+          <span className="font-semibold text-personal">파란색</span> 이 기기에만 저장 ·{" "}
           <span className="font-semibold text-global">빨간색 공용</span> 리더 필기
         </p>
       )}

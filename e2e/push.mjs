@@ -2,7 +2,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import https from "node:https";
-import { BASE, WORK, check, finish, loadPlaywright, login, sql } from "./lib.mjs";
+import { BASE, WORK, check, enterCode, finish, loadPlaywright, openDevice, sql } from "./lib.mjs";
 
 const { chromium, devices } = await loadPlaywright();
 
@@ -27,15 +27,19 @@ function subscription(endpoint) {
     keys: { p256dh: ecdh.getPublicKey().toString("base64url"), auth: crypto.randomBytes(16).toString("base64url") },
   });
 }
+// 다른 기기 2대(정상 1, 만료 1)의 구독을 만든다.
 sql("delete from push_subscriptions");
 for (const ep of ["https://localhost:54400/ok", "https://localhost:54400/gone"]) {
-  sql(`insert into push_subscriptions (user_id, endpoint, subscription, device) values ('00000000-0000-0000-0000-00000000000c', '${ep}', '${subscription(ep)}', 'test')`);
+  sql(`insert into push_subscriptions (device_id, endpoint, subscription, device) values (gen_random_uuid(), '${ep}', '${subscription(ep)}', 'test')`);
 }
-// 리더 자신의 기기에는 보내지 않아야 한다.
-sql(`insert into push_subscriptions (user_id, endpoint, subscription, device) values ('00000000-0000-0000-0000-00000000000b', 'https://localhost:54400/leader', '${subscription("https://localhost:54400/leader")}', 'test')`);
 
 const browser = await chromium.launch({ channel: "chromium" });
-const { page } = await login(browser, devices["Pixel 7"], "leader@test.kr");
+const { page } = await openDevice(browser, devices["Pixel 7"]);
+await enterCode(page, "1234");
+await page.waitForURL(`${BASE}/edit`);
+// 리더 자신의 기기에는 보내지 않아야 한다.
+const leaderDevice = await page.evaluate(() => localStorage.getItem("salrom-device-id"));
+sql(`insert into push_subscriptions (device_id, endpoint, subscription, device) values ('${leaderDevice}', 'https://localhost:54400/leader', '${subscription("https://localhost:54400/leader")}', 'test')`);
 
 // 초안 공개(알림 보내기)
 await page.goto(`${BASE}/edit/${DRAFT}`);
@@ -44,8 +48,8 @@ await page.getByRole("dialog").getByRole("button", { name: "공개", exact: true
 const status = page.getByRole("status").filter({ visible: true }).last();
 await status.waitFor();
 const message = await status.innerText();
-await page.screenshot({ path: `${OUT}/23-published-push.png` });
-check("공개 알림: 결과 안내", message.includes("팀원 기기 1대에 알림을 보냈습니다"), message);
+await page.screenshot({ path: `${OUT}/40-published-push.png` });
+check("공개 알림: 결과 안내", message.includes("기기 1대에 알림을 보냈습니다"), message);
 
 const log = await pushLog();
 const ok = log.filter((r) => r.url === "/ok");
@@ -65,9 +69,8 @@ check("연속 알림 방지: 추가 발송 없음", (await pushLog()).filter((r)
 
 // 서비스 워커: 푸시를 받으면 알림을 띄우고 예배 화면 주소를 담는다.
 // headless shell 에서는 알림이 표시되지 않으므로 run.sh 는 chromium 채널로 실행한다.
-const { context: member, page: mp } = await login(browser, devices["Pixel 7"], "m1@test.kr", {
-  permissions: ["notifications"],
-});
+const { context: member, page: mp } = await openDevice(browser, devices["Pixel 7"], { permissions: ["notifications"] });
+await mp.goto(`${BASE}/`);
 await mp.evaluate(() => navigator.serviceWorker.ready);
 const cdp = await member.newCDPSession(mp);
 const registrations = [];

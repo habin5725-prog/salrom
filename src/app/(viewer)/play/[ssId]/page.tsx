@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Loading } from "@/components/Loading";
 import { SheetViewer } from "@/components/viewer/SheetViewer";
-import { getMember } from "@/lib/auth";
+import { getViewer } from "@/lib/auth";
 import { getPlayData } from "@/lib/data/viewer";
 import { canWriteGlobalNotes } from "@/lib/permissions";
 
@@ -19,12 +19,11 @@ export default function PlayPage({ params }: PageProps<"/play/[ssId]">) {
 
 async function PlayContent({ params }: { params: PageProps<"/play/[ssId]">["params"] }) {
   const { ssId } = await params;
-  const user = await getMember();
-  if (!user) return null;
+  const viewer = await getViewer();
 
   const data = await getPlayData(ssId);
   if (!data) notFound();
 
   // 곡이 바뀌면 화면 상태(확대, 필기 도구)를 새로 시작한다.
-  return <SheetViewer key={ssId} {...data} userId={user.id} canWriteGlobal={canWriteGlobalNotes(user.role)} />;
+  return <SheetViewer key={ssId} {...data} userId={viewer.userId} canWriteGlobal={canWriteGlobalNotes(viewer.role)} />;
 }

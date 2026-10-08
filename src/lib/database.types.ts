@@ -254,7 +254,7 @@ export type Database = {
       push_subscriptions: {
         Row: {
           id: string;
-          user_id: string;
+          device_id: string;
           endpoint: string;
           subscription: Json;
           device: string | null;
@@ -262,21 +262,123 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          user_id?: string;
+          device_id: string;
           endpoint: string;
           subscription: Json;
           device?: string | null;
         };
         Update: Record<string, never>;
+        Relationships: [];
+      };
+      app_settings: {
+        Row: { key: string; value: Json; updated_at: string };
+        Insert: { key: string; value: Json; updated_at?: string };
+        Update: { value?: Json; updated_at?: string };
+        Relationships: [];
+      };
+      visitors: {
+        Row: {
+          id: string;
+          name: string | null;
+          device: string | null;
+          first_seen: string;
+          last_seen: string;
+        };
+        Insert: {
+          id: string;
+          name?: string | null;
+          device?: string | null;
+          first_seen?: string;
+          last_seen?: string;
+        };
+        Update: { name?: string | null; device?: string | null; last_seen?: string };
+        Relationships: [];
+      };
+      visit_sessions: {
+        Row: {
+          id: string;
+          visitor_id: string;
+          started_at: string;
+          last_seen_at: string;
+          mode: "visitor" | "leader" | "admin";
+          city: string | null;
+          region: string | null;
+          country: string | null;
+        };
+        Insert: {
+          id?: string;
+          visitor_id: string;
+          started_at?: string;
+          last_seen_at?: string;
+          mode?: "visitor" | "leader" | "admin";
+          city?: string | null;
+          region?: string | null;
+          country?: string | null;
+        };
+        Update: { last_seen_at?: string; mode?: "visitor" | "leader" | "admin" };
         Relationships: [
           {
-            foreignKeyName: "push_subscriptions_user_id_fkey";
-            columns: ["user_id"];
+            foreignKeyName: "visit_sessions_visitor_id_fkey";
+            columns: ["visitor_id"];
             isOneToOne: false;
-            referencedRelation: "profiles";
+            referencedRelation: "visitors";
             referencedColumns: ["id"];
           },
         ];
+      };
+      page_views: {
+        Row: {
+          id: string;
+          session_id: string;
+          path: string;
+          label: string;
+          started_at: string;
+          last_seen_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          path: string;
+          label: string;
+          started_at?: string;
+          last_seen_at?: string;
+        };
+        Update: { last_seen_at?: string };
+        Relationships: [
+          {
+            foreignKeyName: "page_views_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "visit_sessions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      access_events: {
+        Row: {
+          id: string;
+          created_at: string;
+          kind: string;
+          detail: string | null;
+          visitor_id: string | null;
+          ip_hash: string | null;
+          city: string | null;
+          region: string | null;
+          country: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          kind: string;
+          detail?: string | null;
+          visitor_id?: string | null;
+          ip_hash?: string | null;
+          city?: string | null;
+          region?: string | null;
+          country?: string | null;
+        };
+        Update: Record<string, never>;
+        Relationships: [];
       };
     };
     Views: {
@@ -287,15 +389,10 @@ export type Database = {
         Args: never;
         Returns: Database["public"]["Enums"]["user_role"];
       };
-      is_member: { Args: never; Returns: boolean };
       is_leader: { Args: never; Returns: boolean };
       is_admin: { Args: never; Returns: boolean };
       reorder_service_songs: {
         Args: { p_service_id: string; p_ids: string[] };
-        Returns: undefined;
-      };
-      save_push_subscription: {
-        Args: { p_endpoint: string; p_subscription: Json; p_device: string };
         Returns: undefined;
       };
     };

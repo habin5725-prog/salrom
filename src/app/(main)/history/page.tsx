@@ -3,7 +3,6 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Loading } from "@/components/Loading";
 import { PageHeader } from "@/components/PageHeader";
-import { getMember } from "@/lib/auth";
 import { listPastServices } from "@/lib/data/services";
 import { formatServiceDate } from "@/lib/dates";
 
@@ -18,8 +17,6 @@ export default function HistoryPage() {
 }
 
 async function HistoryContent() {
-  const user = await getMember();
-  if (!user) return null;
   const services = await listPastServices();
 
   return (

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { ActivityTracker } from "@/components/ActivityTracker";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { APP_NAME } from "@/lib/app";
 import "./globals.css";
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         {children}
         <ServiceWorkerRegister />
+        <ActivityTracker />
       </body>
     </html>
   );

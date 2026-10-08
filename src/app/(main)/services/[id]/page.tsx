@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { Loading } from "@/components/Loading";
 import { PageHeader } from "@/components/PageHeader";
 import { ServiceDetail } from "@/components/ServiceDetail";
-import { getMember } from "@/lib/auth";
+import { getViewer } from "@/lib/auth";
 import { getService } from "@/lib/data/services";
 import { todayISO } from "@/lib/dates";
 import { canEditServices } from "@/lib/permissions";
@@ -19,8 +19,7 @@ export default function ServicePage({ params }: PageProps<"/services/[id]">) {
 
 async function ServiceContent({ params }: { params: PageProps<"/services/[id]">["params"] }) {
   const { id } = await params;
-  const user = await getMember();
-  if (!user) return null;
+  const viewer = await getViewer();
 
   const service = await getService(id);
   if (!service) notFound();
@@ -31,7 +30,7 @@ async function ServiceContent({ params }: { params: PageProps<"/services/[id]">[
         title={service.title}
         back={service.date < todayISO() ? { href: "/history", label: "지난 예배" } : { href: "/", label: "홈" }}
       />
-      <ServiceDetail service={service} canEdit={canEditServices(user.role)} />
+      <ServiceDetail service={service} canEdit={canEditServices(viewer.role)} />
     </>
   );
 }

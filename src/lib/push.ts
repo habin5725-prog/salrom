@@ -1,6 +1,7 @@
 import "server-only";
 
 import webpush, { type PushSubscription } from "web-push";
+import { getVapidKeys } from "./settings";
 
 // Web Push(VAPID) 발송. 별도 유료 서비스 없이 브라우저 기본 푸시 서버를 사용한다.
 
@@ -15,19 +16,9 @@ export type PushPayload = {
 
 export type PushTarget = { endpoint: string; subscription: unknown };
 
-export function isPushConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
-}
-
-let configured = false;
-function configure() {
-  if (configured) return;
-  webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT || "mailto:admin@example.com",
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-    process.env.VAPID_PRIVATE_KEY!,
-  );
-  configured = true;
+/** 알림 키가 준비되어 있는지(환경 변수 또는 설치 때 자동 생성) */
+export async function isPushConfigured(): Promise<boolean> {
+  return (await getVapidKeys()) !== null;
 }
 
 function isSubscription(value: unknown): value is PushSubscription {
@@ -44,7 +35,9 @@ export async function sendPush(
   targets: PushTarget[],
   payload: PushPayload,
 ): Promise<{ sent: number; failed: number; expired: string[] }> {
-  configure();
+  const keys = await getVapidKeys();
+  if (!keys) return { sent: 0, failed: targets.length, expired: [] };
+  const vapidDetails = { subject: keys.subject, publicKey: keys.publicKey, privateKey: keys.privateKey };
   const body = JSON.stringify(payload);
   const expired: string[] = [];
   let sent = 0;
@@ -58,7 +51,7 @@ export async function sendPush(
       }
       try {
         // 하루 안에 기기가 켜지지 않으면 버린다.
-        await webpush.sendNotification(target.subscription, body, { TTL: 60 * 60 * 24 });
+        await webpush.sendNotification(target.subscription, body, { TTL: 60 * 60 * 24, vapidDetails });
         sent++;
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode;

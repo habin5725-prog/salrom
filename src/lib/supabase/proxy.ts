@@ -3,9 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "../database.types";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured } from "./env";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback"];
-
-/** 매 요청마다 로그인 세션을 갱신하고 로그인하지 않은 사용자를 로그인 화면으로 보낸다. */
+/**
+ * 매 요청마다 리더/총 관리자 모드의 로그인 세션을 갱신한다.
+ * 사이트는 누구나 로그인 없이 보므로 로그인 화면으로 보내지 않는다(편집 화면은 각 페이지가 확인한다).
+ */
 export async function updateSession(request: NextRequest) {
   if (!isSupabaseConfigured()) return NextResponse.next({ request });
 
@@ -25,33 +26,10 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // getClaims는 토큰을 검증한다. 이 호출과 createServerClient 사이에 다른 코드를 넣지 않는다.
-  const { data } = await supabase.auth.getClaims();
-  const signedIn = Boolean(data?.claims?.sub);
-
-  const { pathname, search } = request.nextUrl;
-  const isPublic = PUBLIC_PATHS.includes(pathname);
-
-  if (!signedIn && !isPublic) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
-    return redirectWithCookies(url, response);
-  }
-
-  if (signedIn && pathname === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return redirectWithCookies(url, response);
+  // 세션 쿠키가 있을 때만 확인(갱신)한다. 대부분의 방문자는 쿠키가 없어 그냥 지나간다.
+  if (request.cookies.getAll().some((c) => c.name.startsWith("sb-"))) {
+    await supabase.auth.getClaims();
   }
 
   return response;
-}
-
-// 갱신된 세션 쿠키를 잃지 않도록 리다이렉트 응답에도 옮겨 담는다.
-function redirectWithCookies(url: URL, from: NextResponse) {
-  const redirect = NextResponse.redirect(url);
-  from.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
-  return redirect;
 }

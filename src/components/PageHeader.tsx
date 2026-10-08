@@ -12,7 +12,7 @@ type Props = {
 
 export function PageHeader({ title, eyebrow, back, action }: Props) {
   return (
-    <header className="safe-top mb-5">
+    <header className="mb-5">
       {back && (
         <Link
           href={back.href}

@@ -1,68 +1,57 @@
 import "server-only";
 
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { cache } from "react";
-import { canEditServices, canManageUsers, isApproved, type Role } from "./permissions";
+import { canEditServices, canManageSite, type Role } from "./permissions";
 import { isSupabaseConfigured } from "./supabase/env";
 import { getServerSupabase } from "./supabase/server";
 
-export type CurrentUser = {
-  id: string;
-  email: string;
-  name: string;
-  role: Role;
-  instrument: string | null;
+// 누구나 로그인 없이 본다. 리더 모드와 총 관리자 모드는 비밀번호로 들어가며,
+// 들어가면 서버가 공용 계정(리더용, 총 관리자용)으로 로그인시켜 데이터베이스 권한(RLS)이 적용된다.
+
+export type Mode = "visitor" | "leader" | "admin";
+
+export type Viewer = {
+  mode: Mode;
+  /** 리더/총 관리자 공용 계정 ID. 방문자는 null */
+  userId: string | null;
+  role: Role | null;
 };
 
-/** 현재 로그인한 사용자와 프로필. 한 요청 안에서는 한 번만 조회한다. */
-export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
-  if (!isSupabaseConfigured()) return null;
+export function modeOf(role: Role | null | undefined): Mode {
+  if (role === "admin") return "admin";
+  if (role === "leader") return "leader";
+  return "visitor";
+}
+
+/** 지금 화면을 보는 사람의 모드. 한 요청 안에서는 한 번만 확인한다. */
+export const getViewer = cache(async (): Promise<Viewer> => {
+  // 화면은 사람마다 다르고 현재 시각(오늘 날짜)도 쓰므로 항상 요청 시점에 만든다.
+  await connection();
+  const visitor: Viewer = { mode: "visitor", userId: null, role: null };
+  if (!isSupabaseConfigured()) return visitor;
   const supabase = await getServerSupabase();
   const { data } = await supabase.auth.getClaims();
-  const claims = data?.claims;
-  if (!claims?.sub) return null;
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, name, role, instrument")
-    .eq("id", claims.sub)
-    .maybeSingle();
-  const email = typeof claims.email === "string" ? claims.email : "";
-
-  // 로그인은 되었지만 프로필이 아직 없으면 승인 대기로 취급한다(로그인 화면과 무한 반복 방지).
-  if (!profile) {
-    return { id: claims.sub, name: "", role: "pending", instrument: null, email };
-  }
-
-  return {
-    id: profile.id,
-    name: profile.name,
-    role: profile.role,
-    instrument: profile.instrument,
-    email,
-  };
+  const sub = data?.claims?.sub;
+  if (!sub) return visitor;
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", sub).maybeSingle();
+  const role = profile?.role ?? null;
+  return { mode: modeOf(role), userId: sub, role };
 });
 
-// 레이아웃과 페이지는 따로 렌더링되므로 페이지마다 아래 함수로 다시 확인한다.
-// 승인 대기 중이면 null을 돌려주고, 이때 레이아웃의 AccessGate가 승인 대기 안내를 보여준다.
+// 레이아웃과 페이지는 따로 렌더링되므로 편집 화면은 페이지마다 아래 함수로 다시 확인한다.
 
-/** 승인된 팀원이면 사용자 정보. 로그인하지 않았으면 로그인 화면으로 보낸다. */
-export async function getMember(): Promise<CurrentUser | null> {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  return isApproved(user.role) ? user : null;
+/** 리더 모드나 총 관리자 모드가 아니면 비밀번호 화면으로 보낸다. */
+export async function getLeader(next = "/edit"): Promise<Viewer> {
+  const viewer = await getViewer();
+  if (!canEditServices(viewer.role)) redirect(`/login?next=${encodeURIComponent(next)}`);
+  return viewer;
 }
 
-/** 리더나 총 관리자만. 일반 팀원은 홈으로 보낸다. */
-export async function getLeader(): Promise<CurrentUser | null> {
-  const user = await getMember();
-  if (user && !canEditServices(user.role)) redirect("/");
-  return user;
-}
-
-/** 총 관리자만. 아니면 설정 화면으로 보낸다. */
-export async function getAdmin(): Promise<CurrentUser | null> {
-  const user = await getMember();
-  if (user && !canManageUsers(user.role)) redirect("/settings");
-  return user;
+/** 총 관리자 모드가 아니면 비밀번호 화면으로 보낸다. */
+export async function getAdmin(next = "/admin"): Promise<Viewer> {
+  const viewer = await getViewer();
+  if (!canManageSite(viewer.role)) redirect(`/login?next=${encodeURIComponent(next)}&need=admin`);
+  return viewer;
 }

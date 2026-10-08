@@ -3,12 +3,9 @@
 import { useEffect, useState } from "react";
 import { sendTestPush } from "@/app/actions/push";
 import { BellIcon } from "@/components/icons";
-import type { Json } from "@/lib/database.types";
-import { getBrowserSupabase } from "@/lib/supabase/client";
+import { getDeviceId } from "@/lib/device";
 
 type State = "checking" | "unsupported" | "ios-install" | "not-ready" | "denied" | "off" | "on";
-
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
@@ -28,8 +25,17 @@ function deviceLabel(): string {
   return "기기";
 }
 
-async function initialState(): Promise<State> {
-  if (!VAPID_PUBLIC_KEY) return "not-ready";
+async function savePush(body: object): Promise<boolean> {
+  const response = await fetch("/api/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, deviceId: getDeviceId() }),
+  });
+  return response.ok;
+}
+
+async function initialState(vapidPublicKey: string | null): Promise<State> {
+  if (!vapidPublicKey) return "not-ready";
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
   const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
   if (!supported) return isIOS ? "ios-install" : "unsupported";
@@ -39,16 +45,16 @@ async function initialState(): Promise<State> {
   return subscription && Notification.permission === "granted" ? "on" : "off";
 }
 
-export function PushToggle() {
+export function PushToggle({ vapidPublicKey }: { vapidPublicKey: string | null }) {
   const [state, setState] = useState<State>("checking");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    initialState()
+    initialState(vapidPublicKey)
       .then(setState)
       .catch(() => setState("unsupported"));
-  }, []);
+  }, [vapidPublicKey]);
 
   async function turnOn() {
     setBusy(true);
@@ -64,14 +70,14 @@ export function PushToggle() {
         (await registration.pushManager.getSubscription()) ??
         (await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey ?? ""),
         }));
-      const { error } = await getBrowserSupabase().rpc("save_push_subscription", {
-        p_endpoint: subscription.endpoint,
-        p_subscription: JSON.parse(JSON.stringify(subscription)) as Json,
-        p_device: deviceLabel(),
+      const ok = await savePush({
+        action: "subscribe",
+        subscription: JSON.parse(JSON.stringify(subscription)),
+        device: deviceLabel(),
       });
-      if (error) throw error;
+      if (!ok) throw new Error("save failed");
       setState("on");
       setMessage("알림을 켰습니다.");
     } catch {
@@ -88,7 +94,7 @@ export function PushToggle() {
       const registration = await navigator.serviceWorker.getRegistration();
       const subscription = await registration?.pushManager.getSubscription();
       if (subscription) {
-        await getBrowserSupabase().from("push_subscriptions").delete().eq("endpoint", subscription.endpoint);
+        await savePush({ action: "unsubscribe", endpoint: subscription.endpoint });
         await subscription.unsubscribe();
       }
       setState("off");

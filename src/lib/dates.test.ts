@@ -35,3 +35,12 @@ describe("날짜", () => {
     expect(() => formatServiceDate("2026/10/11")).toThrow();
   });
 });
+
+describe("시각 표시", () => {
+  it("한국 시간으로 날짜와 시각을 보여준다", async () => {
+    const { formatDateTime, formatTime } = await import("./dates");
+    // UTC 05:30 = 한국 14:30
+    expect(formatDateTime("2026-10-08T05:30:00Z")).toBe("10월 8일 (목) 오후 2:30");
+    expect(formatTime("2026-10-08T05:30:00Z")).toBe("오후 2:30");
+  });
+});

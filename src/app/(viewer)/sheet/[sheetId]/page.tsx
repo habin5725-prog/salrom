@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Loading } from "@/components/Loading";
 import { SheetViewer } from "@/components/viewer/SheetViewer";
-import { getMember } from "@/lib/auth";
+import { getViewer } from "@/lib/auth";
 import { getSheetViewData } from "@/lib/data/viewer";
 import { canWriteGlobalNotes } from "@/lib/permissions";
 
@@ -25,8 +25,7 @@ async function SheetContent({
   searchParams: PageProps<"/sheet/[sheetId]">["searchParams"];
 }) {
   const [{ sheetId }, query] = await Promise.all([params, searchParams]);
-  const user = await getMember();
-  if (!user) return null;
+  const viewer = await getViewer();
 
   const v = Number(Array.isArray(query.v) ? query.v[0] : query.v);
   const data = await getSheetViewData(sheetId, Number.isInteger(v) ? v : null);
@@ -36,8 +35,8 @@ async function SheetContent({
     <SheetViewer
       key={`${sheetId}-${data.sheet?.version}`}
       {...data}
-      userId={user.id}
-      canWriteGlobal={canWriteGlobalNotes(user.role)}
+      userId={viewer.userId}
+      canWriteGlobal={canWriteGlobalNotes(viewer.role)}
     />
   );
 }

@@ -17,7 +17,7 @@ export default function NewServicePage() {
 }
 
 async function NewServiceContent() {
-  const user = await getLeader();
+  const user = await getLeader("/edit/new");
   if (!user) return null;
 
   return (

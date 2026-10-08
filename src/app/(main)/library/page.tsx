@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Loading } from "@/components/Loading";
 import { PageHeader } from "@/components/PageHeader";
-import { getMember } from "@/lib/auth";
 import { listLibrarySongs } from "@/lib/data/songs";
 import { LibrarySearch } from "./LibrarySearch";
 
@@ -17,8 +16,6 @@ export default function LibraryPage() {
 }
 
 async function LibraryContent() {
-  const user = await getMember();
-  if (!user) return null;
   const songs = await listLibrarySongs();
 
   return (

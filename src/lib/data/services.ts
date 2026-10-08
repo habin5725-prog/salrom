@@ -1,5 +1,6 @@
 import "server-only";
 
+import { connection } from "next/server";
 import { todayISO } from "../dates";
 import { getServerSupabase } from "../supabase/server";
 
@@ -79,6 +80,8 @@ export async function getService(serviceId: string): Promise<ServiceWithSetlist 
 
 /** 오늘 이후 가장 가까운 예배. 없으면 null */
 export async function getUpcomingService(): Promise<ServiceWithSetlist | null> {
+  // 오늘 날짜를 쓰므로 요청 시점에 실행한다.
+  await connection();
   const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("services")
@@ -97,6 +100,8 @@ export type PastService = ServiceSummary & { songs: { title: string; songKey: st
 
 /** 지난 예배 목록(최근 순) */
 export async function listPastServices(limit = 60): Promise<PastService[]> {
+  // 오늘 날짜를 쓰므로 요청 시점에 실행한다.
+  await connection();
   const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("services")
@@ -115,6 +120,8 @@ export async function listPastServices(limit = 60): Promise<PastService[]> {
 
 /** 리더용: 앞으로의 예배와 초안 목록 */
 export async function listEditableServices(): Promise<ServiceSummary[]> {
+  // 오늘 날짜를 쓰므로 요청 시점에 실행한다.
+  await connection();
   const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from("services")

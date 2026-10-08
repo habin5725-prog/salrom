@@ -4,8 +4,7 @@ import { PencilIcon } from "@/components/icons";
 import { Loading } from "@/components/Loading";
 import { PageHeader } from "@/components/PageHeader";
 import { DraftBadge, Setlist } from "@/components/Setlist";
-import { APP_NAME } from "@/lib/app";
-import { getMember } from "@/lib/auth";
+import { getViewer } from "@/lib/auth";
 import { getUpcomingService } from "@/lib/data/services";
 import { formatServiceDate, relativeDayLabel, todayISO } from "@/lib/dates";
 import { canEditServices } from "@/lib/permissions";
@@ -19,15 +18,14 @@ export default function HomePage() {
 }
 
 async function HomeContent() {
-  const user = await getMember();
-  if (!user) return null;
+  const viewer = await getViewer();
 
   const service = await getUpcomingService();
-  const isLeader = canEditServices(user.role);
+  const isLeader = canEditServices(viewer.role);
 
   return (
     <>
-      <PageHeader eyebrow={APP_NAME} title="이번 주 찬양" />
+      <PageHeader title="이번 주 찬양" />
 
       {service ? (
         <section className="card overflow-hidden">

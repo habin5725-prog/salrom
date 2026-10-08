@@ -1,16 +1,9 @@
-do $$ begin
-  if not exists (select 1 from pg_roles where rolname = 'authenticator') then
-    create role authenticator login password 'authpass' noinherit;
-  end if;
-end $$;
-grant anon, authenticated, service_role to authenticator;
+-- 브라우저 검증용 예시 데이터. 마이그레이션 다음에 적용한다.
+-- 리더/총 관리자 공용 계정은 앱이 비밀번호로 들어갈 때 직접 만든다.
 
-insert into auth.users (id, email, raw_user_meta_data) values
-  ('00000000-0000-0000-0000-00000000000a', 'admin@test.kr', '{"name":"관리자"}'),
-  ('00000000-0000-0000-0000-00000000000b', 'leader@test.kr', '{"name":"리더"}'),
-  ('00000000-0000-0000-0000-00000000000c', 'm1@test.kr', '{"name":"건반"}');
-update public.profiles set role = 'leader' where id = '00000000-0000-0000-0000-00000000000b';
-update public.profiles set role = 'member' where id = '00000000-0000-0000-0000-00000000000c';
+-- API 조회 확인(api-check.mjs)용 리더 계정
+insert into auth.users (id, email, raw_user_meta_data, raw_app_meta_data) values
+  ('00000000-0000-0000-0000-00000000000b', 'api-leader@test.kr', '{"name":"API 리더"}', '{"app_role":"leader"}');
 
 insert into public.services (id, service_date, title, status) values
   ('10000000-0000-0000-0000-000000000001', current_date + 3, '주일예배', 'published'),
@@ -30,5 +23,3 @@ insert into public.service_songs (id, service_id, song_id, sheet_id, sheet_versi
   ('40000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', 1, 2, 'A'),
   ('40000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 1, 1, 'F'),
   ('40000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000002', null, null, 1, 'D');
-insert into public.push_subscriptions (user_id, endpoint, subscription) values
-  ('00000000-0000-0000-0000-00000000000c', 'https://push.test/m1', '{"endpoint":"https://push.test/m1","keys":{"p256dh":"x","auth":"y"}}');

@@ -21,7 +21,7 @@ export default function EditServicePage({ params }: PageProps<"/edit/[id]">) {
 
 async function EditServiceContent({ params }: { params: PageProps<"/edit/[id]">["params"] }) {
   const { id } = await params;
-  const user = await getLeader();
+  const user = await getLeader(`/edit/${id}`);
   if (!user) return null;
 
   const data = await getEditorData(id);

@@ -4,6 +4,7 @@ import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Tables } from "@/lib/database.types";
 import { annotationToInsert, parseAnnotation, type Annotation } from "@/lib/annotations/model";
+import { deleteLocalNote, loadLocalNotes, saveLocalNote } from "@/lib/local-notes";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 
 type UndoEntry =
@@ -15,12 +16,12 @@ const MAX_UNDO = 50;
 
 /**
  * 한 악보 파일(sheet + version)의 필기.
- * 화면에 먼저 반영하고 바로 서버에 저장한다. 저장에 실패하면 되돌리고 onError로 알린다.
- * 다른 사람이 고친 공용 필기는 실시간으로 받고, 앱을 다시 열 때도 한 번 새로 읽는다.
+ * 개인 필기는 이 기기에만, 공용 필기는 서버에 저장한다.
+ * 화면에 먼저 반영하고 바로 저장한다. 저장에 실패하면 되돌리고 onError로 알린다.
+ * 리더가 고친 공용 필기는 실시간으로 받고, 앱을 다시 열 때도 한 번 새로 읽는다.
  */
 export function useAnnotations(sheetId: string | null, version: number, onError: (message: string) => void) {
   const [items, setItems] = useState<Map<string, Annotation>>(() => new Map());
-  const [loaded, setLoaded] = useState(false);
   const undoStack = useRef<UndoEntry[]>([]);
   const [canUndo, setCanUndo] = useState(false);
   const onErrorRef = useRef(onError);
@@ -48,31 +49,27 @@ export function useAnnotations(sheetId: string | null, version: number, onError:
     let cancelled = false;
 
     async function load() {
-      const { data, error } = await supabase
-        .from("annotations")
-        .select("*")
-        .eq("sheet_id", id)
-        .eq("sheet_version", version);
+      const [server, local] = await Promise.all([
+        supabase.from("annotations").select("*").eq("sheet_id", id).eq("sheet_version", version),
+        loadLocalNotes(id, version).catch(() => [] as Annotation[]),
+      ]);
       if (cancelled) return;
-      if (error) {
-        onErrorRef.current("필기를 불러오지 못했습니다.");
-        return;
-      }
+      if (server.error) onErrorRef.current("공용 필기를 불러오지 못했습니다.");
       const next = new Map<string, Annotation>();
-      for (const row of data ?? []) {
+      for (const row of server.data ?? []) {
         const annotation = parseAnnotation(row);
         if (annotation) next.set(annotation.id, annotation);
       }
+      for (const annotation of local) next.set(annotation.id, annotation);
       setItems(next);
-      setLoaded(true);
     }
 
     load();
 
     const onChange = (payload: RealtimePostgresChangesPayload<Tables<"annotations">>) => {
       if (payload.eventType === "DELETE") {
-        const id = (payload.old as Partial<Tables<"annotations">>).id;
-        if (id) drop(id);
+        const deleted = (payload.old as Partial<Tables<"annotations">>).id;
+        if (deleted) drop(deleted);
         return;
       }
       const annotation = parseAnnotation(payload.new);
@@ -81,9 +78,9 @@ export function useAnnotations(sheetId: string | null, version: number, onError:
 
     // 삭제 알림은 조건(filter)을 걸 수 없어 따로 받는다(삭제된 행의 ID만 온다).
     const channel = supabase
-      .channel(`annotations:${sheetId}:${version}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "annotations", filter: `sheet_id=eq.${sheetId}` }, onChange)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "annotations", filter: `sheet_id=eq.${sheetId}` }, onChange)
+      .channel(`annotations:${id}:${version}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "annotations", filter: `sheet_id=eq.${id}` }, onChange)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "annotations", filter: `sheet_id=eq.${id}` }, onChange)
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "annotations" }, onChange)
       .subscribe();
 
@@ -105,27 +102,50 @@ export function useAnnotations(sheetId: string | null, version: number, onError:
     setCanUndo(true);
   }, []);
 
-  // 아래 세 함수는 실제 저장만 한다. track이 true면 되돌리기 목록에 남긴다.
+  // 개인 필기는 기기에, 공용 필기는 서버에 저장한다. 실패하면 true
+  const persist = useCallback(async (kind: "insert" | "delete" | "update", annotation: Annotation) => {
+    try {
+      if (annotation.scope === "personal") {
+        if (kind === "delete") await deleteLocalNote(annotation.id);
+        else await saveLocalNote(annotation);
+        return false;
+      }
+      const table = getBrowserSupabase().from("annotations");
+      const { error } =
+        kind === "insert"
+          ? await table.insert(annotationToInsert(annotation))
+          : kind === "delete"
+            ? await table.delete().eq("id", annotation.id)
+            : await table.update({ data: annotationToInsert(annotation).data }).eq("id", annotation.id);
+      return Boolean(error);
+    } catch {
+      return true;
+    }
+  }, []);
+
+  // 아래 세 함수는 화면 반영과 저장을 한다. track이 true면 되돌리기 목록에 남긴다.
   const insertRow = useCallback(
     async (annotation: Annotation, track: boolean) => {
       put(annotation);
-      const { error } = await getBrowserSupabase().from("annotations").insert(annotationToInsert(annotation));
-      if (error) {
+      if (await persist("insert", annotation)) {
         drop(annotation.id);
-        onErrorRef.current("필기를 저장하지 못했습니다. 인터넷 연결을 확인해 주세요.");
+        onErrorRef.current(
+          annotation.scope === "personal"
+            ? "이 기기에 필기를 저장하지 못했습니다."
+            : "공용 필기를 저장하지 못했습니다. 인터넷 연결을 확인해 주세요.",
+        );
         return false;
       }
       if (track) remember({ kind: "add", annotation });
       return true;
     },
-    [put, drop, remember],
+    [put, drop, persist, remember],
   );
 
   const deleteRow = useCallback(
     async (annotation: Annotation, track: boolean) => {
       drop(annotation.id);
-      const { error } = await getBrowserSupabase().from("annotations").delete().eq("id", annotation.id);
-      if (error) {
+      if (await persist("delete", annotation)) {
         put(annotation);
         onErrorRef.current("필기를 지우지 못했습니다.");
         return false;
@@ -133,17 +153,13 @@ export function useAnnotations(sheetId: string | null, version: number, onError:
       if (track) remember({ kind: "remove", annotation });
       return true;
     },
-    [put, drop, remember],
+    [put, drop, persist, remember],
   );
 
   const updateRow = useCallback(
     async (before: Annotation, after: Annotation, track: boolean) => {
       put(after);
-      const { error } = await getBrowserSupabase()
-        .from("annotations")
-        .update({ data: annotationToInsert(after).data })
-        .eq("id", after.id);
-      if (error) {
+      if (await persist("update", after)) {
         put(before);
         onErrorRef.current("필기를 고치지 못했습니다.");
         return false;
@@ -151,7 +167,7 @@ export function useAnnotations(sheetId: string | null, version: number, onError:
       if (track) remember({ kind: "update", before, after });
       return true;
     },
-    [put, remember],
+    [put, persist, remember],
   );
 
   const undo = useCallback(async () => {
@@ -165,7 +181,6 @@ export function useAnnotations(sheetId: string | null, version: number, onError:
 
   return {
     annotations: items,
-    loaded,
     canUndo,
     add: (a: Annotation) => insertRow(a, true),
     remove: (a: Annotation) => deleteRow(a, true),

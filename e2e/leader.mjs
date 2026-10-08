@@ -1,6 +1,6 @@
 // 리더 흐름과 공용 필기 브라우저 검증
 import fs from "node:fs";
-import { BASE, WORK, check, collectErrors, finish, loadPlaywright, login, sql, visible } from "./lib.mjs";
+import { BASE, WORK, check, collectErrors, enterCode, finish, loadPlaywright, openDevice, sql, visible } from "./lib.mjs";
 
 const { chromium, devices } = await loadPlaywright();
 
@@ -10,15 +10,22 @@ const SERVICE1 = "10000000-0000-0000-0000-000000000001";
 
 const browser = await chromium.launch();
 const errors = [];
-async function signIn(email) {
-  const session = await login(browser, devices["Pixel 7"], email);
-  collectErrors(session.page, errors, email);
+async function newDevice(label) {
+  const session = await openDevice(browser, devices["Pixel 7"]);
+  collectErrors(session.page, errors, label);
   return session;
 }
 const toast = (page) => visible(page.getByRole("status")).last();
 
-// ---------------- 리더 ----------------
-const { page } = await signIn("leader@test.kr");
+// ---------------- 리더 모드(비밀번호 1234) ----------------
+const { page } = await newDevice("리더");
+await enterCode(page, "1234");
+await page.waitForURL(`${BASE}/edit`);
+check("로그인: 1234 → 리더 모드, 예배 관리로 이동", true);
+check("로그인: 위쪽에 리더 모드 표시", (await visible(page.getByRole("link", { name: "리더 모드" })).count()) === 1);
+check("로그인: 공용 리더 계정 생성", sql("select role from profiles p join auth.users u on u.id = p.id where u.email = 'worship-leader@example.com'") === "leader");
+check("로그인: 관리 기록", sql("select count(*) from access_events where kind='login_success' and detail='리더 모드'") === "1");
+await page.goto(`${BASE}/`);
 await visible(page.getByText("이번 주 편집")).waitFor();
 check("홈: 리더에게 이번 주 편집 버튼", true);
 await visible(page.getByText("이번 주 편집")).click();
@@ -133,7 +140,7 @@ await page.screenshot({ path: `${OUT}/17-leader-global.png` });
 check("공용 필기: 선과 글자 저장", sql(`select count(*) from annotations where scope='global' and sheet_version=2`) === "2");
 
 // ---------------- 팀원이 공용 필기를 본다 ----------------
-const member = await signIn("m1@test.kr");
+const member = await newDevice("방문자");
 const mp = member.page;
 await mp.goto(`${BASE}/play/40000000-0000-0000-0000-000000000001`);
 await visible(mp.locator("canvas")).first().waitFor({ timeout: 20000 });
@@ -153,16 +160,17 @@ await mp.waitForTimeout(800);
 check("팀원: 공용 필기는 지울 수 없음", sql(`select count(*) from annotations where scope='global'`) === "2");
 await mp.screenshot({ path: `${OUT}/18-member-sees-global.png` });
 
-// 개인 필기는 1번째 파일에 남아 있고 2번째 파일에는 보이지 않는다
-check("버전: 이전 파일의 개인 필기 보존", sql(`select count(*) from annotations where scope='personal' and sheet_version=1`) === "1");
-check("버전: 새 파일에는 이전 필기 안 보임", (await msvg.locator("path[stroke='#1d4ed8']").count()) === 0);
+check("버전: 서버에는 공용 필기만 있음", sql(`select count(*) from annotations where scope='personal'`) === "0");
 
-// ---------------- 총 관리자 ----------------
-const admin = await signIn("admin@test.kr");
-await admin.page.goto(`${BASE}/settings/users`);
-await visible(admin.page.getByText("승인 대기 0명")).waitFor();
-await admin.page.screenshot({ path: `${OUT}/19-users.png`, fullPage: true });
-check("관리자: 사용자 관리 화면", (await visible(admin.page.locator("select")).count()) === 3);
+// ---------------- 리더 모드에서 나가기 ----------------
+await page.goto(`${BASE}/settings`);
+await visible(page.getByRole("button", { name: "관리 모드에서 나가기" })).click();
+await page.waitForURL(`${BASE}/`);
+await visible(page.getByRole("link", { name: "로그인" })).waitFor();
+check("나가기: 다시 로그인 버튼", true);
+await page.goto(`${BASE}/edit`);
+await page.waitForURL(/\/login/);
+check("나가기: 편집 화면은 다시 비밀번호 필요", true);
 
 check("브라우저 오류 없음", errors.length === 0, errors.join(" | "));
 await browser.close();

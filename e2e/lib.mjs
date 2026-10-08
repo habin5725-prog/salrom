@@ -29,16 +29,29 @@ export async function loadPlaywright() {
 /** 화면에 보이는 요소만(앞서 본 화면이 숨겨진 채 남아 있을 수 있다) */
 export const visible = (locator) => locator.filter({ visible: true });
 
-export async function login(browser, device, email, { permissions = [] } = {}) {
+/**
+ * 새 기기(브라우저)로 사이트를 연다. 로그인은 없다.
+ * welcome: false 면 처음 방문 안내를 이미 본 기기로 만든다.
+ */
+export async function openDevice(browser, device, { welcome = false, permissions = [] } = {}) {
   const context = await browser.newContext({ ...device });
   if (permissions.length > 0) await context.grantPermissions(permissions, { origin: BASE });
+  if (!welcome) {
+    await context.addInitScript(() => {
+      try {
+        localStorage.setItem("salrom-welcome-seen", "1");
+      } catch {}
+    });
+  }
   const page = await context.newPage();
-  await page.goto(`${BASE}/login`);
-  await page.fill("#email", email);
-  await page.fill("#password", "password");
-  await page.click("button[type=submit]");
-  await page.waitForURL(`${BASE}/`);
   return { context, page };
+}
+
+/** 관리자 로그인 화면에서 비밀번호를 넣고 들어간다. */
+export async function enterCode(page, code) {
+  await page.goto(`${BASE}/login`);
+  await page.locator("#code").fill(code);
+  await page.getByRole("button", { name: "들어가기" }).click();
 }
 
 /** 브라우저 오류를 모은다(실시간 연결 실패는 테스트 환경에 실시간 서버가 없어서 제외). */

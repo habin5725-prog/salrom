@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 로컬 브라우저 검증.
 # 실제 Supabase 대신 로컬 Postgres + PostgREST + 흉내 서버(인증, 파일 저장, 푸시)로 앱 전체를 띄우고
-# 팀원, 리더, 확대, 알림 시나리오를 실제 브라우저(Playwright)로 실행한다.
+# 처음 설치, 방문자, 리더, 총 관리자, 확대, 알림 시나리오를 실제 브라우저(Playwright)로 실행한다.
 #
 # 필요: psql(Postgres 16 이상), node, python3 + reportlab, openssl, curl, playwright
 # 사용법: PG_TEST_URL=postgres://postgres:postgres@localhost:5432/postgres bash e2e/run.sh
@@ -41,17 +41,30 @@ cleanup() {
 }
 trap cleanup EXIT
 
-reset_db() {
+apply() {
+  psql "$DB_URL" -q -v ON_ERROR_STOP=1 -f "$1" 2>&1 | grep -v -e wal_level -e HINT -e NOTICE || true
+}
+
+# 빈 데이터베이스(Supabase 기본 구성만, 앱 표 없음)
+reset_empty() {
   psql "$BASE_URL" -q -c "drop database if exists salrom_e2e with (force)" -c "create database salrom_e2e"
-  for f in "$ROOT/supabase/tests/supabase_stub.sql" "$ROOT"/supabase/migrations/*.sql "$E2E/seed.sql"; do
-    psql "$DB_URL" -q -v ON_ERROR_STOP=1 -f "$f" 2>&1 | grep -v -e wal_level -e HINT -e NOTICE || true
-  done
+  apply "$ROOT/supabase/tests/supabase_stub.sql"
+  apply "$E2E/roles.sql"
   rm -rf "$WORK/storage/sheets/"*-*-*-*-*
-  # PostgREST가 다시 연결해 스키마를 읽을 때까지 기다린다.
-  for _ in $(seq 1 40); do
+}
+
+wait_for_table() {
+  for _ in $(seq 1 60); do
     if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PGRST_PORT/songs" -H "Authorization: Bearer $SERVICE")" = "200" ]; then return; fi
     sleep 0.25
   done
+}
+
+# 앱 표 + 예시 데이터
+reset_full() {
+  reset_empty
+  for f in "$ROOT"/supabase/migrations/*.sql "$E2E/seed.sql"; do apply "$f"; done
+  wait_for_table
 }
 
 # 테스트용 키, 인증서, 악보 PDF
@@ -61,9 +74,6 @@ const b=o=>Buffer.from(JSON.stringify(o)).toString("base64url");
 const sign=p=>{const h=b({alg:"HS256",typ:"JWT"});const d=b(p);return h+"."+d+"."+c.createHmac("sha256",s).update(h+"."+d).digest("base64url")};
 console.log("ANON="+sign({role:"anon",iat:1700000000,exp:2000000000}));
 console.log("SERVICE="+sign({role:"service_role",iat:1700000000,exp:2000000000}));' "$SECRET")"
-VAPID_JSON="$(cd "$ROOT" && npx --yes web-push generate-vapid-keys --json)"
-VAPID_PUBLIC="$(node -p "JSON.parse(process.argv[1]).publicKey" "$VAPID_JSON")"
-VAPID_PRIVATE="$(node -p "JSON.parse(process.argv[1]).privateKey" "$VAPID_JSON")"
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/push-key.pem" -out "$WORK/push-cert.pem" -days 2 \
   -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null
 python3 "$E2E/make-pdfs.py" "$WORK"
@@ -76,7 +86,7 @@ for port in $APP_PORT $PGRST_PORT 54321 54400; do
   fi
 done
 HOSTPORT="$(node -p 'const u=new URL(process.argv[1]); u.hostname+":"+(u.port||5432)' "$BASE_URL")"
-psql "$BASE_URL" -q -c "drop database if exists salrom_e2e with (force)" -c "create database salrom_e2e"
+reset_empty
 cat > "$WORK/postgrest.conf" <<EOF
 db-uri = "postgres://authenticator:authpass@$HOSTPORT/salrom_e2e"
 db-schemas = "public"
@@ -87,12 +97,13 @@ EOF
 "$BIN/postgrest" "$WORK/postgrest.conf" > "$WORK/postgrest.log" 2>&1 & PIDS+=($!)
 node "$E2E/fake-supabase.mjs" "$WORK/storage" > "$WORK/fake-supabase.log" 2>&1 & PIDS+=($!)
 node "$E2E/mock-push.mjs" "$WORK" > "$WORK/mock-push.log" 2>&1 & PIDS+=($!)
-reset_db
 
+# Vercel에서 Supabase를 연결했을 때와 같은 이름의 환경 변수(새 키 이름)를 쓴다.
+# 알림 키는 넣지 않는다(처음 설치 때 자동으로 만드는지 확인).
 # NEXT_PUBLIC_ 값은 빌드할 때, 나머지 서버 전용 값은 실행할 때 읽으므로 둘 다에 넘긴다.
-export NEXT_PUBLIC_SUPABASE_URL="http://localhost:54321" NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON" \
-  SUPABASE_SERVICE_ROLE_KEY="$SERVICE" NEXT_PUBLIC_VAPID_PUBLIC_KEY="$VAPID_PUBLIC" \
-  VAPID_PRIVATE_KEY="$VAPID_PRIVATE" VAPID_SUBJECT="mailto:test@example.com"
+export NEXT_PUBLIC_SUPABASE_URL="http://localhost:54321" NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON" \
+  SUPABASE_SECRET_KEY="$SERVICE" POSTGRES_URL_NON_POOLING="$DB_URL" VAPID_SUBJECT="mailto:test@example.com"
+unset NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY NEXT_PUBLIC_VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY || true
 echo "테스트 환경으로 앱 빌드 중..."
 (cd "$ROOT" && npm run build > "$WORK/build.log" 2>&1)
 # 흉내 푸시 서버의 자체 서명 인증서를 믿도록 한다(테스트 전용).
@@ -102,13 +113,16 @@ for _ in $(seq 1 60); do curl -s -o /dev/null "http://localhost:$APP_PORT/login"
 status=0
 run() { (cd "$E2E" && node "$@") || status=1; }
 
+echo; echo "== 처음 설치 =="; run setup.mjs
+reset_full
 echo; echo "== API 조회와 권한 =="; run api-check.mjs
-reset_db
-echo; echo "== 팀원 =="; run member.mjs
-echo; echo "== 리더 =="; run leader.mjs
-reset_db
-echo; echo "== 확대와 태블릿 =="; run pinch.mjs
-reset_db
+reset_full
+echo; echo "== 방문자(로그인 없음) =="; run visitor.mjs
+echo; echo "== 리더 모드 =="; run leader.mjs
+echo; echo "== 총 관리자 모드 =="; run admin.mjs
+reset_full
+echo; echo "== 확대, 태블릿, 노트북 =="; run pinch.mjs
+reset_full
 echo; echo "== 알림 =="; run push.mjs
 
 echo

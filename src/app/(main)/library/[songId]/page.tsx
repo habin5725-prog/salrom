@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Loading } from "@/components/Loading";
 import { PageHeader } from "@/components/PageHeader";
-import { getMember } from "@/lib/auth";
 import { getSongDetail } from "@/lib/data/songs";
 import { formatServiceDate } from "@/lib/dates";
 
@@ -23,8 +22,6 @@ function formatUploaded(iso: string) {
 
 async function SongContent({ params }: { params: PageProps<"/library/[songId]">["params"] }) {
   const { songId } = await params;
-  const user = await getMember();
-  if (!user) return null;
 
   const song = await getSongDetail(songId);
   if (!song) notFound();

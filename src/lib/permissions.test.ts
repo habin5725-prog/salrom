@@ -4,35 +4,34 @@ import {
   canDeleteLibraryItems,
   canDeletePublishedServices,
   canEditServices,
-  canManageUsers,
+  canManageSite,
   canWriteGlobalNotes,
-  isApproved,
   type Role,
 } from "./permissions";
 
 // supabase/migrations 의 RLS 규칙과 같은 표이다. 정책을 바꾸면 이 표도 함께 바꾼다.
-const expected: Record<Role, [boolean, boolean, boolean, boolean, boolean, boolean]> = {
-  //        승인됨  예배편집 공용필기 사용자관리 악보삭제 공개예배삭제
-  pending: [false, false, false, false, false, false],
-  member: [true, false, false, false, false, false],
-  leader: [true, true, true, false, false, false],
-  admin: [true, true, true, true, true, true],
+const expected: Record<Role, [boolean, boolean, boolean, boolean, boolean]> = {
+  //        예배편집 공용필기 사이트관리 악보삭제 공개예배삭제
+  pending: [false, false, false, false, false],
+  member: [false, false, false, false, false],
+  leader: [true, true, false, false, false],
+  admin: [true, true, true, true, true],
 };
 
 describe("권한 표", () => {
   it.each(ROLES)("%s", (role) => {
     expect([
-      isApproved(role),
       canEditServices(role),
       canWriteGlobalNotes(role),
-      canManageUsers(role),
+      canManageSite(role),
       canDeleteLibraryItems(role),
       canDeletePublishedServices(role),
     ]).toEqual(expected[role]);
   });
 
-  it("로그인하지 않았으면 아무 권한도 없다", () => {
-    expect(isApproved(null)).toBe(false);
-    expect(canEditServices(undefined)).toBe(false);
+  it("방문자(로그인 없음)는 편집 권한이 없다", () => {
+    expect(canEditServices(null)).toBe(false);
+    expect(canWriteGlobalNotes(undefined)).toBe(false);
+    expect(canManageSite(null)).toBe(false);
   });
 });

@@ -62,3 +62,18 @@ export function relativeDayLabel(iso: string, today: string): string {
   if (diff > 1) return `${diff}일 후`;
   return "지난 예배";
 }
+
+/** 시각 표시: '10월 8일 (목) 오후 2:30' (한국 시간) */
+export function formatDateTime(isoTimestamp: string): string {
+  const date = new Date(isoTimestamp);
+  const day = todayISO(date);
+  const time = new Intl.DateTimeFormat("ko-KR", { timeZone: APP_TIME_ZONE, hour: "numeric", minute: "2-digit" }).format(date);
+  return `${formatServiceDate(day)} ${time}`;
+}
+
+/** 시각만: '오후 2:30' (한국 시간) */
+export function formatTime(isoTimestamp: string): string {
+  return new Intl.DateTimeFormat("ko-KR", { timeZone: APP_TIME_ZONE, hour: "numeric", minute: "2-digit" }).format(
+    new Date(isoTimestamp),
+  );
+}

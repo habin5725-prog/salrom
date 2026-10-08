@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { Loading } from "@/components/Loading";
 import { PageHeader } from "@/components/PageHeader";
 import { ServiceDetail } from "@/components/ServiceDetail";
-import { getMember } from "@/lib/auth";
+import { getViewer } from "@/lib/auth";
 import { getUpcomingService } from "@/lib/data/services";
 import { canEditServices } from "@/lib/permissions";
 
@@ -19,15 +19,14 @@ export default function WeekPage() {
 }
 
 async function WeekContent() {
-  const user = await getMember();
-  if (!user) return null;
+  const viewer = await getViewer();
   const service = await getUpcomingService();
 
   return (
     <>
       <PageHeader title="이번 주 순서" />
       {service ? (
-        <ServiceDetail service={service} canEdit={canEditServices(user.role)} />
+        <ServiceDetail service={service} canEdit={canEditServices(viewer.role)} />
       ) : (
         <section className="card px-5 py-8 text-center">
           <p className="text-[1.1rem] font-semibold">아직 이번 주 찬양이 올라오지 않았습니다.</p>

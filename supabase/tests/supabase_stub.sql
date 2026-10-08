@@ -18,7 +18,8 @@ create schema auth;
 create table auth.users (
   id uuid primary key,
   email text,
-  raw_user_meta_data jsonb not null default '{}'::jsonb
+  raw_user_meta_data jsonb not null default '{}'::jsonb,
+  raw_app_meta_data jsonb not null default '{}'::jsonb
 );
 
 -- Supabase의 auth.uid()와 같은 방식으로 JWT claim에서 사용자 ID를 읽는다.
