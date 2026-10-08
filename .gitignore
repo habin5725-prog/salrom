@@ -45,3 +45,7 @@ next-env.d.ts
 
 # pdf.js 보조 파일(설치 시 자동 복사)
 /public/pdfjs
+
+# 로컬 브라우저 검증 작업 폴더
+/e2e/.work
+/e2e/.bin

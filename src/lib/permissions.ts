@@ -34,6 +34,11 @@ export function canManageUsers(role: Role | null | undefined): boolean {
   return role === "admin";
 }
 
+/** 공개된 예배 삭제(리더는 초안만 삭제할 수 있다) */
+export function canDeletePublishedServices(role: Role | null | undefined): boolean {
+  return role === "admin";
+}
+
 /** 악보함의 곡과 악보 삭제 */
 export function canDeleteLibraryItems(role: Role | null | undefined): boolean {
   return role === "admin";

@@ -25,7 +25,14 @@ function formatTime(iso: string) {
   }).format(new Date(iso));
 }
 
-export function ServiceEditor({ initial }: { initial: EditorService }) {
+export function ServiceEditor({
+  initial,
+  canDeletePublished,
+}: {
+  initial: EditorService;
+  /** 총 관리자는 공개된 예배도 삭제할 수 있다. */
+  canDeletePublished: boolean;
+}) {
   const router = useRouter();
   const [service, setService] = useState(initial);
   const [items, setItems] = useState<EditorItem[]>(initial.items);
@@ -316,6 +323,11 @@ export function ServiceEditor({ initial }: { initial: EditorService }) {
             <button type="button" className="btn btn-secondary btn-sm mt-4 w-full" onClick={unpublish} disabled={busy}>
               공개 취소(초안으로)
             </button>
+            {canDeletePublished && (
+              <button type="button" className="btn btn-danger btn-sm mt-3 w-full" onClick={deleteService}>
+                이 예배 삭제(총 관리자)
+              </button>
+            )}
           </>
         ) : (
           <>

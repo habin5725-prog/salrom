@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ROLES,
   canDeleteLibraryItems,
+  canDeletePublishedServices,
   canEditServices,
   canManageUsers,
   canWriteGlobalNotes,
@@ -10,12 +11,12 @@ import {
 } from "./permissions";
 
 // supabase/migrations 의 RLS 규칙과 같은 표이다. 정책을 바꾸면 이 표도 함께 바꾼다.
-const expected: Record<Role, [boolean, boolean, boolean, boolean, boolean]> = {
-  //        승인됨  예배편집 공용필기 사용자관리 악보삭제
-  pending: [false, false, false, false, false],
-  member: [true, false, false, false, false],
-  leader: [true, true, true, false, false],
-  admin: [true, true, true, true, true],
+const expected: Record<Role, [boolean, boolean, boolean, boolean, boolean, boolean]> = {
+  //        승인됨  예배편집 공용필기 사용자관리 악보삭제 공개예배삭제
+  pending: [false, false, false, false, false, false],
+  member: [true, false, false, false, false, false],
+  leader: [true, true, true, false, false, false],
+  admin: [true, true, true, true, true, true],
 };
 
 describe("권한 표", () => {
@@ -26,6 +27,7 @@ describe("권한 표", () => {
       canWriteGlobalNotes(role),
       canManageUsers(role),
       canDeleteLibraryItems(role),
+      canDeletePublishedServices(role),
     ]).toEqual(expected[role]);
   });
 

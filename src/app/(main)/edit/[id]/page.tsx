@@ -6,6 +6,7 @@ import { Loading } from "@/components/Loading";
 import { PageHeader } from "@/components/PageHeader";
 import { getLeader } from "@/lib/auth";
 import { getEditorData } from "@/lib/data/editor";
+import { canDeletePublishedServices } from "@/lib/permissions";
 import { ServiceEditor } from "./ServiceEditor";
 
 export const metadata: Metadata = { title: "예배 편집" };
@@ -38,7 +39,7 @@ async function EditServiceContent({ params }: { params: PageProps<"/edit/[id]">[
         }
       />
       {/* 같은 예배를 다시 열면 서버의 최신 값으로 새로 시작한다. */}
-      <ServiceEditor key={data.id} initial={data} />
+      <ServiceEditor key={data.id} initial={data} canDeletePublished={canDeletePublishedServices(user.role)} />
     </>
   );
 }
