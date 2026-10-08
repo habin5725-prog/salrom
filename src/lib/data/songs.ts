@@ -1,5 +1,6 @@
 import "server-only";
 
+import { connection } from "next/server";
 import { kindOfPath, type FileKind } from "../files";
 import { getServerSupabase } from "../supabase/server";
 
@@ -12,6 +13,8 @@ export type LibrarySong = {
 
 /** 악보함 전체 곡. 검색은 화면에서 한다(팀 규모상 곡 수가 많지 않다). */
 export async function listLibrarySongs(): Promise<LibrarySong[]> {
+  // 악보함은 곡이 추가되거나 지워지면 바로 달라지므로 요청할 때마다 읽는다.
+  await connection();
   const supabase = await getServerSupabase();
   const [songsResult, usageResult] = await Promise.all([
     supabase.from("songs").select("id, title, sheets(id)").order("title"),
@@ -57,6 +60,7 @@ export type SongDetail = {
 };
 
 export async function getSongDetail(songId: string): Promise<SongDetail | null> {
+  await connection();
   const supabase = await getServerSupabase();
   const { data: song, error } = await supabase
     .from("songs")

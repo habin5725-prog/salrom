@@ -126,6 +126,8 @@ async function applyPending(url: string): Promise<{ ok: boolean; message: string
          on conflict (key) do update set value = excluded.value, updated_at = now()`,
         [SCHEMA_KEY, JSON.stringify({ applied: all })],
       );
+      // 바뀐 표 구조를 API 서버가 바로 알아보게 한다(커밋할 때 전달된다).
+      await client.query("notify pgrst, 'reload schema'");
     }
     await client.query("commit");
     return { ok: true, message: pending.length > 0 ? `${pending.length}개 적용` : "적용할 것 없음" };

@@ -54,9 +54,12 @@ reset_empty() {
 }
 
 wait_for_table() {
+  # 데이터베이스를 새로 만들면 PostgREST가 표와 관계 정보를 다시 읽어야 한다.
+  # 다시 읽으라고 알리고, 표 사이 관계(곡 목록의 곡명)까지 조회될 때까지 기다린다.
   for _ in $(seq 1 60); do
-    if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PGRST_PORT/songs" -H "Authorization: Bearer $SERVICE")" = "200" ]; then return; fi
+    psql "$DB_URL" -q -c "notify pgrst, 'reload schema'" >/dev/null 2>&1 || true
     sleep 0.25
+    if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PGRST_PORT/service_songs?select=id,songs(title),sheet_versions(file_path)&limit=1" -H "Authorization: Bearer $SERVICE")" = "200" ]; then return; fi
   done
 }
 
