@@ -8,6 +8,7 @@ import { getAdmin } from "@/lib/auth";
 import { EVENT_LABEL, durationText, getDashboard, modeText, type VisitRow } from "@/lib/data/admin";
 import { formatDateTime, formatTime } from "@/lib/dates";
 import { usingDefaultCode } from "@/lib/settings";
+import { getUpgradeProblem } from "@/lib/setup";
 import { AutoRefresh } from "./AutoRefresh";
 
 export const metadata: Metadata = { title: "관리자 화면" };
@@ -58,6 +59,7 @@ function VisitItem({ visit, live }: { visit: VisitRow; live?: boolean }) {
 
 async function AdminContent() {
   await getAdmin();
+  const upgradeProblem = getUpgradeProblem();
   const [dashboard, leaderDefault, adminDefault] = await Promise.all([
     getDashboard(),
     usingDefaultCode("leader"),
@@ -68,6 +70,16 @@ async function AdminContent() {
     <>
       <PageHeader title="관리자 화면" />
       <AutoRefresh seconds={30} />
+
+      {upgradeProblem && (
+        <div role="alert" className="mb-4 rounded-2xl bg-red-50 px-4 py-3 text-danger break-keep">
+          <p className="font-semibold">{upgradeProblem}</p>
+          <p className="mt-1 text-[0.95rem]">
+            사진 외의 파일 올리기 같은 새 기능이 동작하지 않을 수 있습니다. 안내서(README)의 &quot;업데이트가 자동으로
+            적용되지 않을 때&quot; 순서를 따라 주세요.
+          </p>
+        </div>
+      )}
 
       {(leaderDefault || adminDefault) && (
         <Link href="/admin/settings" className="mb-4 block rounded-2xl bg-amber-50 px-4 py-3 text-amber-900 break-keep">

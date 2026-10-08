@@ -25,10 +25,12 @@ import {
   type AnnotationScope,
 } from "@/lib/annotations/model";
 import type { ViewerData } from "@/lib/data/viewer";
+import { kindOfPath } from "@/lib/files";
 import { openPdf, type PdfPage } from "@/lib/pdf";
 import { loadSheetPdf, prefetchSheetPdf } from "@/lib/sheet-cache";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { AnnotationLayer, type Tool } from "./AnnotationLayer";
+import { FileView } from "./FileView";
 import { PdfPageCanvas } from "./PdfPageCanvas";
 import { useAnnotations } from "./useAnnotations";
 import { usePinchZoom } from "./usePinchZoom";
@@ -70,8 +72,10 @@ export function SheetViewer(props: Props) {
   const { zoom, zoomBy, canZoomIn, canZoomOut } = usePinchZoom(containerRef, contentRef);
   useWakeLock();
 
-  // 악보 파일 불러오기(기기에 저장해 둔 것이 있으면 그것을 쓴다)
-  const filePath = sheet?.filePath ?? null;
+  // 악보 파일 불러오기(기기에 저장해 둔 것이 있으면 그것을 쓴다).
+  // PDF가 아닌 파일(음원, 문서 등)은 FileView 가 따로 연다.
+  const isPdf = sheet ? kindOfPath(sheet.filePath) === "pdf" : false;
+  const filePath = sheet && isPdf ? sheet.filePath : null;
   // 서버에서 화면을 새로 받아도 같은 목록이면 다시 불러오지 않도록 문자열로 비교한다.
   const prefetchKey = prefetchPaths.join("\n");
   useEffect(() => {
@@ -209,7 +213,7 @@ export function SheetViewer(props: Props) {
               type="button"
               className="flex min-h-12 w-12 flex-col items-center justify-center rounded-xl border border-line bg-surface text-[0.75rem] font-semibold disabled:opacity-40"
               onClick={() => zoomBy(1 / 1.25)}
-              disabled={!canZoomOut}
+              disabled={!canZoomOut || !isPdf}
             >
               <MinusIcon size={20} />
               작게
@@ -218,7 +222,7 @@ export function SheetViewer(props: Props) {
               type="button"
               className="flex min-h-12 w-12 flex-col items-center justify-center rounded-xl border border-line bg-surface text-[0.75rem] font-semibold disabled:opacity-40"
               onClick={() => zoomBy(1.25)}
-              disabled={!canZoomIn}
+              disabled={!canZoomIn || !isPdf}
             >
               <PlusIcon size={20} />
               크게
@@ -251,6 +255,8 @@ export function SheetViewer(props: Props) {
         >
           {!sheet ? (
             <Message text="이 곡은 아직 악보가 없습니다." />
+          ) : !isPdf ? (
+            <FileView path={sheet.filePath} title={title} />
           ) : load.status === "loading" ? (
             <Message text="악보를 불러오는 중입니다" spinner />
           ) : load.status === "error" ? (
@@ -334,7 +340,7 @@ export function SheetViewer(props: Props) {
             ) : (
               <span />
             )}
-            <button type="button" className="btn btn-primary px-2" onClick={startAnnotating} disabled={!sheet || load.status !== "ready"}>
+            <button type="button" className="btn btn-primary px-2" onClick={startAnnotating} disabled={!isPdf || load.status !== "ready"}>
               <PencilIcon size={22} />
               필기
             </button>

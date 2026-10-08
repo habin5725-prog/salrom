@@ -1,4 +1,5 @@
 // 브라우저 검증 공통 도구. run.sh 가 환경 변수를 채운 뒤 각 시나리오를 실행한다.
+import zlib from "node:zlib";
 import { execFileSync } from "node:child_process";
 
 export const BASE = process.env.E2E_APP_URL ?? "http://localhost:3100";
@@ -60,4 +61,33 @@ export function collectErrors(page, errors, label = "") {
   page.on("console", (m) => {
     if (m.type() === "error" && !/realtime|websocket/i.test(m.text())) errors.push(`${label} console: ${m.text()}`);
   });
+}
+
+/** 테스트용 사진(PNG): 흰 바탕에 오선처럼 가로줄을 긋는다. */
+export function makePng(width, height, lineEvery = 40) {
+  const row = width * 3 + 1;
+  const raw = Buffer.alloc(row * height, 255);
+  for (let y = 0; y < height; y++) {
+    raw[y * row] = 0;
+    if (y % lineEvery < 2) raw.fill(30, y * row + 1, (y + 1) * row);
+  }
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // 8비트
+  header[9] = 2; // RGB
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", header),
+    chunk("IDAT", zlib.deflateSync(raw)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
 }

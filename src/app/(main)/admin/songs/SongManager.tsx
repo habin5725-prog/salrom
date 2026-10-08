@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useState } from "react";
-import { deleteSong, renameSong } from "@/app/actions/admin";
+import { renameSong } from "@/app/actions/admin";
+import { confirmAndDeleteSong } from "@/components/DeleteSongButton";
 import { SearchIcon } from "@/components/icons";
 import { searchSongs } from "@/lib/hangul";
 
@@ -30,12 +31,11 @@ export function SongManager({ songs }: { songs: Song[] }) {
   }
 
   async function remove(song: Song) {
-    if (!window.confirm(`"${song.title}"을(를) 악보 파일과 함께 지울까요? 되돌릴 수 없습니다.`)) return;
     setBusy(true);
-    const r = await deleteSong(song.id);
-    setMessage({ ok: r.ok, text: r.message });
+    const r = await confirmAndDeleteSong(song);
+    if (r) setMessage({ ok: r.ok, text: r.message });
     setBusy(false);
-    if (r.ok) router.refresh();
+    if (r?.ok) router.refresh();
   }
 
   return (

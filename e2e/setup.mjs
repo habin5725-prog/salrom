@@ -1,4 +1,5 @@
 // 처음 설치: 표가 없는 데이터베이스에서 "사이트 준비하기"를 누르면 표, 권한 정책, 처음 비밀번호, 알림 키가 만들어진다.
+import fs from "node:fs";
 import { BASE, WORK, check, collectErrors, finish, loadPlaywright, openDevice, sql } from "./lib.mjs";
 
 const { chromium, devices } = await loadPlaywright();
@@ -22,8 +23,15 @@ check("준비 후: 홈 화면", await page.getByText("아직 이번 주 찬양�
 check("준비 후: 표 생성", Number(sql("select count(*) from information_schema.tables where table_schema='public'")) >= 12);
 check(
   "준비 후: 처음 비밀번호와 알림 키",
-  sql("select string_agg(key, ',' order by key) from app_settings") === "admin_code,leader_code,vapid",
+  sql("select string_agg(key, ',' order by key) from app_settings") === "admin_code,leader_code,schema,vapid",
 );
+const files = fs.readdirSync(new URL("../supabase/migrations/", import.meta.url)).filter((f) => f.endsWith(".sql")).sort();
+check(
+  "준비 후: 적용한 스키마 파일을 모두 기록",
+  sql("select value->>'applied' from app_settings where key='schema'") === JSON.stringify(files).replace(/,/g, ", "),
+  sql("select value->>'applied' from app_settings where key='schema'"),
+);
+check("준비 후: 모든 파일 형식 허용(50MB)", sql("select coalesce(allowed_mime_types::text, 'all') || '|' || file_size_limit from storage.buckets where id='sheets'") === "all|52428800");
 check("준비 후: 비밀번호는 원문이 아닌 해시로 저장", !sql("select value::text from app_settings where key='leader_code'").includes("1234"));
 check("준비 후: 관리 기록에 남김", sql("select count(*) from access_events where kind='setup'") === "1");
 check("브라우저 오류 없음", errors.length === 0, errors.join(" | "));

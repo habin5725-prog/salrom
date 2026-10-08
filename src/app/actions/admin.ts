@@ -1,6 +1,7 @@
 "use server";
 
 import { getViewer } from "@/lib/auth";
+import { formatServiceDate } from "@/lib/dates";
 import { canManageSite } from "@/lib/permissions";
 import { isUuid } from "@/lib/request-context";
 import { changeCode, type CodeRole } from "@/lib/settings";
@@ -47,18 +48,37 @@ export async function renameSong(songId: string, title: string): Promise<AdminRe
   return error ? { ok: false, message: "바꾸지 못했습니다." } : { ok: true, message: "곡명을 바꿨습니다." };
 }
 
-/** 곡 삭제(악보 파일과 공용 필기 포함). 예배 기록에 쓰인 곡은 지우지 않는다. */
-export async function deleteSong(songId: string): Promise<AdminResult> {
+export type DeleteSongResult = AdminResult & {
+  /** 예배 순서에 쓰인 곡이라 한 번 더 확인이 필요하다. */
+  needsConfirm?: boolean;
+};
+
+/**
+ * 곡 삭제(악보, 모든 파일, 공용 필기 포함). 되돌릴 수 없다.
+ * 예배 순서에 쓰인 곡은 force 없이 부르면 쓰인 곳을 알려 주고, force 로 다시 부르면 그 예배 순서에서도 뺀다.
+ */
+export async function deleteSong(songId: string, force = false): Promise<DeleteSongResult> {
   if (!(await isAdmin())) return { ok: false, message: "총 관리자만 지울 수 있습니다." };
   if (!isUuid(songId)) return { ok: false, message: "잘못된 요청입니다." };
   const supabase = await getServerSupabase();
 
-  const { count } = await supabase
+  const { data: uses, error: usesError } = await supabase
     .from("service_songs")
-    .select("id", { count: "exact", head: true })
+    .select("id, services(service_date, title)")
     .eq("song_id", songId);
-  if ((count ?? 0) > 0) {
-    return { ok: false, message: "예배 순서에 쓰인 곡이라 지울 수 없습니다. 먼저 해당 예배에서 빼 주세요." };
+  if (usesError) return { ok: false, message: "지우지 못했습니다. 잠시 후 다시 시도해 주세요." };
+  if (uses.length > 0 && !force) {
+    const dates = [...new Set(uses.flatMap((u) => (u.services ? [formatServiceDate(u.services.service_date)] : [])))];
+    const shown = dates.slice(0, 3).join(", ") + (dates.length > 3 ? ` 외 ${dates.length - 3}곳` : "");
+    return {
+      ok: false,
+      needsConfirm: true,
+      message: `이 곡은 예배 순서(${shown})에 들어 있습니다. 지우면 그 예배 순서에서도 빠집니다.`,
+    };
+  }
+  if (uses.length > 0) {
+    const { error } = await supabase.from("service_songs").delete().eq("song_id", songId);
+    if (error) return { ok: false, message: "예배 순서에서 빼지 못했습니다." };
   }
 
   const { data: versions } = await supabase

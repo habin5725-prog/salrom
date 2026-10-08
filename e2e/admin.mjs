@@ -67,10 +67,20 @@ await page.getByLabel("새 곡명").fill("은혜 아니면(편곡)");
 await visible(page.getByRole("button", { name: "저장" })).click();
 await visible(page.getByText("곡명을 바꿨습니다.")).waitFor();
 check("곡 관리: 이름 바꾸기", sql("select count(*) from songs where title = '은혜 아니면(편곡)'") === "1");
-page.once("dialog", (d) => d.accept());
+// 예배 순서에 쓰인 곡은 한 번 더 묻는다. 두 번째 확인에서 취소하면 지우지 않는다.
+const prompts = [];
+const onDialog = (d) => {
+  prompts.push(d.message());
+  if (prompts.length === 1) d.accept();
+  else d.dismiss();
+};
+page.on("dialog", onDialog);
 await visible(page.getByRole("listitem").filter({ hasText: "주님의 은혜" })).first().getByRole("button", { name: "지우기" }).click();
-await visible(page.getByText(/예배 순서에 쓰인 곡이라/)).waitFor();
-check("곡 관리: 예배에 쓰인 곡은 지우지 않음", sql("select count(*) from songs where title = '주님의 은혜'") === "1");
+for (let i = 0; i < 50 && prompts.length < 2; i++) await page.waitForTimeout(200);
+page.off("dialog", onDialog);
+await page.waitForTimeout(500);
+check("곡 관리: 예배 순서에 쓰인 곡은 한 번 더 확인", prompts.length === 2 && /예배 순서/.test(prompts[1]), prompts.join(" / "));
+check("곡 관리: 두 번째 확인에서 취소하면 지우지 않음", sql("select count(*) from songs where title = '주님의 은혜'") === "1");
 
 // 기기별 미리보기
 await page.goto(`${BASE}/preview`);

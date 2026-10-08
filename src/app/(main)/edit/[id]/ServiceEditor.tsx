@@ -173,7 +173,12 @@ export function ServiceEditor({
   }
 
   async function deleteService() {
-    if (!window.confirm("이 예배를 삭제할까요? 곡 목록도 함께 지워집니다(악보함은 그대로).")) return;
+    if (
+      !window.confirm(
+        "이 예배를 삭제할까요?\n예배 날짜와 곡 순서만 지워지고, 올린 곡과 악보는 악보함에 그대로 남습니다.\n곡까지 지우려면 악보함에서 곡을 열고 '이 곡 지우기'를 누르세요(총 관리자).",
+      )
+    )
+      return;
     const { error } = await getBrowserSupabase().from("services").delete().eq("id", service.id);
     if (error) {
       failed("삭제하지 못했습니다.");

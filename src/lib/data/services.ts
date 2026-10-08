@@ -2,6 +2,7 @@ import "server-only";
 
 import { connection } from "next/server";
 import { todayISO } from "../dates";
+import { kindOfPath, type FileKind } from "../files";
 import { getServerSupabase } from "../supabase/server";
 
 // 화면용 조회 함수. 모든 조회는 로그인한 사용자 권한(RLS)으로 실행된다.
@@ -15,6 +16,8 @@ export type SetlistItem = {
   title: string;
   sheetId: string | null;
   sheetVersion: number | null;
+  /** 이 곡에 고른 파일의 종류(악보 PDF, 음원, 문서 등). 악보가 없으면 null */
+  fileKind: FileKind | null;
 };
 
 export type ServiceSummary = {
@@ -26,7 +29,8 @@ export type ServiceSummary = {
 
 export type ServiceWithSetlist = ServiceSummary & { songs: SetlistItem[] };
 
-const SETLIST_SELECT = "id, position, song_key, song_id, sheet_id, sheet_version, songs(title)" as const;
+const SETLIST_SELECT =
+  "id, position, song_key, song_id, sheet_id, sheet_version, songs(title), sheet_versions(file_path)" as const;
 
 type SetlistRow = {
   id: string;
@@ -36,6 +40,7 @@ type SetlistRow = {
   sheet_id: string | null;
   sheet_version: number | null;
   songs: { title: string } | null;
+  sheet_versions: { file_path: string } | null;
 };
 
 function toSetlistItem(row: SetlistRow): SetlistItem {
@@ -47,6 +52,7 @@ function toSetlistItem(row: SetlistRow): SetlistItem {
     title: row.songs?.title ?? "(삭제된 곡)",
     sheetId: row.sheet_id,
     sheetVersion: row.sheet_version,
+    fileKind: row.sheet_versions ? kindOfPath(row.sheet_versions.file_path) : null,
   };
 }
 

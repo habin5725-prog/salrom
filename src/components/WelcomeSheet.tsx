@@ -56,11 +56,9 @@ export function WelcomeSheet() {
         }}
       >
         <h2 className="text-[1.3rem] font-bold">처음 오셨네요</h2>
-        <p className="mt-2 text-muted break-keep">
-          이름을 알려 주시면 관리자가 누가 보고 있는지 알 수 있습니다. 적지 않아도 사용할 수 있습니다.
-        </p>
+        <p className="mt-2 font-semibold text-accent-strong break-keep">꼭 실명으로 등록해 주세요!</p>
         <label htmlFor="visitor-name" className="label mt-4">
-          이름(선택)
+          이름
         </label>
         <input
           id="visitor-name"

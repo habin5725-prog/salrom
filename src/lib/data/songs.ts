@@ -1,5 +1,6 @@
 import "server-only";
 
+import { kindOfPath, type FileKind } from "../files";
 import { getServerSupabase } from "../supabase/server";
 
 export type LibrarySong = {
@@ -43,7 +44,9 @@ export type SongSheet = {
   id: string;
   name: string;
   currentVersion: number;
-  versions: { version: number; createdAt: string }[];
+  /** 가장 최근 파일의 종류(악보 PDF, 음원, 문서 등) */
+  kind: FileKind;
+  versions: { version: number; createdAt: string; kind: FileKind }[];
 };
 
 export type SongDetail = {
@@ -57,7 +60,7 @@ export async function getSongDetail(songId: string): Promise<SongDetail | null> 
   const supabase = await getServerSupabase();
   const { data: song, error } = await supabase
     .from("songs")
-    .select("id, title, sheets(id, name, current_version, created_at, sheet_versions(version, created_at))")
+    .select("id, title, sheets(id, name, current_version, created_at, sheet_versions(version, created_at, file_path))")
     .eq("id", songId)
     .maybeSingle();
   if (error) throw new Error(`곡을 불러오지 못했습니다: ${error.message}`);
@@ -81,14 +84,18 @@ export async function getSongDetail(songId: string): Promise<SongDetail | null> 
     title: song.title,
     sheets: [...song.sheets]
       .sort((a, b) => a.created_at.localeCompare(b.created_at))
-      .map((sheet) => ({
-        id: sheet.id,
-        name: sheet.name,
-        currentVersion: sheet.current_version,
-        versions: sheet.sheet_versions
-          .map((v) => ({ version: v.version, createdAt: v.created_at }))
-          .sort((a, b) => b.version - a.version),
-      })),
+      .map((sheet) => {
+        const versions = sheet.sheet_versions
+          .map((v) => ({ version: v.version, createdAt: v.created_at, kind: kindOfPath(v.file_path) }))
+          .sort((a, b) => b.version - a.version);
+        return {
+          id: sheet.id,
+          name: sheet.name,
+          currentVersion: sheet.current_version,
+          kind: versions.find((v) => v.version === sheet.current_version)?.kind ?? "pdf",
+          versions,
+        };
+      }),
     usage,
   };
 }

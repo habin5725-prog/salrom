@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 로컬 브라우저 검증.
 # 실제 Supabase 대신 로컬 Postgres + PostgREST + 흉내 서버(인증, 파일 저장, 푸시)로 앱 전체를 띄우고
-# 처음 설치, 방문자, 리더, 총 관리자, 확대, 알림 시나리오를 실제 브라우저(Playwright)로 실행한다.
+# 처음 설치, 업데이트, 방문자, 리더, 총 관리자, 파일 올리기, 확대, 알림 시나리오를 실제 브라우저(Playwright)로 실행한다.
 #
 # 필요: psql(Postgres 16 이상), node, python3 + reportlab, openssl, curl, playwright
 # 사용법: PG_TEST_URL=postgres://postgres:postgres@localhost:5432/postgres bash e2e/run.sh
@@ -60,6 +60,14 @@ wait_for_table() {
   done
 }
 
+# 업데이트 장치가 생기기 전에 설치한 사이트: 처음 설치 파일(init)과 예시 데이터만 있다.
+reset_old() {
+  reset_empty
+  apply "$ROOT/supabase/migrations/20261008000000_init.sql"
+  apply "$E2E/seed.sql"
+  wait_for_table
+}
+
 # 앱 표 + 예시 데이터
 reset_full() {
   reset_empty
@@ -106,20 +114,38 @@ export NEXT_PUBLIC_SUPABASE_URL="http://localhost:54321" NEXT_PUBLIC_SUPABASE_PU
 unset NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY NEXT_PUBLIC_VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY || true
 echo "테스트 환경으로 앱 빌드 중..."
 (cd "$ROOT" && npm run build > "$WORK/build.log" 2>&1)
-# 흉내 푸시 서버의 자체 서명 인증서를 믿도록 한다(테스트 전용).
-(cd "$ROOT" && NODE_EXTRA_CA_CERTS="$WORK/push-cert.pem" exec node node_modules/next/dist/bin/next start -p "$APP_PORT" > "$WORK/next.log" 2>&1) & PIDS+=($!)
-for _ in $(seq 1 60); do curl -s -o /dev/null "http://localhost:$APP_PORT/login" && break; sleep 0.5; done
+# 앱 서버. 설치 상태를 기억하므로 "업데이트 자동 적용" 시나리오 전에는 새로 띄운다.
+APP_PID=""
+start_app() {
+  # 흉내 푸시 서버의 자체 서명 인증서를 믿도록 한다(테스트 전용).
+  (cd "$ROOT" && NODE_EXTRA_CA_CERTS="$WORK/push-cert.pem" exec node node_modules/next/dist/bin/next start -p "$APP_PORT" >> "$WORK/next.log" 2>&1) &
+  APP_PID=$!
+  PIDS+=("$APP_PID")
+  # 화면 주소를 열면 설치 상태 확인과 업데이트가 먼저 일어나므로 고정 파일로 준비를 확인한다.
+  for _ in $(seq 1 60); do curl -s -o /dev/null "http://localhost:$APP_PORT/manifest.webmanifest" && break; sleep 0.5; done
+}
+restart_app() {
+  kill "$APP_PID" 2>/dev/null || true
+  wait "$APP_PID" 2>/dev/null || true
+  start_app
+}
+start_app
 
 status=0
 run() { (cd "$E2E" && node "$@") || status=1; }
 
 echo; echo "== 처음 설치 =="; run setup.mjs
+reset_old
+restart_app
+echo; echo "== 업데이트 자동 적용 =="; run upgrade.mjs
 reset_full
 echo; echo "== API 조회와 권한 =="; run api-check.mjs
 reset_full
 echo; echo "== 방문자(로그인 없음) =="; run visitor.mjs
 echo; echo "== 리더 모드 =="; run leader.mjs
 echo; echo "== 총 관리자 모드 =="; run admin.mjs
+reset_full
+echo; echo "== 사진, 음원, 문서 올리기와 곡 지우기 =="; run files.mjs
 reset_full
 echo; echo "== 확대, 태블릿, 노트북 =="; run pinch.mjs
 reset_full

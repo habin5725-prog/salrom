@@ -3,16 +3,16 @@
 import { useEffect, useState } from "react";
 import { Dialog } from "@/components/Dialog";
 import type { EditorItem } from "@/lib/data/editor";
-import { uploadNewSheet, uploadNewVersion } from "@/lib/sheet-upload";
+import { defaultSheetName, prepareFiles, uploadNewSheet, uploadNewVersion } from "@/lib/sheet-upload";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { ChoiceRow } from "./AddSongDialog";
-import { FilePicker } from "./FilePicker";
+import { AttachmentPicker } from "./AttachmentPicker";
 
 type SheetOption = { id: string; name: string; current_version: number };
 
 export type SheetPatch = Pick<EditorItem, "sheetId" | "sheetVersion" | "sheetName" | "sheetLatestVersion">;
 
-/** 이번 주 곡의 악보 바꾸기: 다른 악보 고르기, 최신 파일로 바꾸기, 새 PDF 올리기 */
+/** 이번 주 곡의 악보 바꾸기: 다른 악보 고르기, 최신 파일로 바꾸기, 새 사진이나 파일 올리기 */
 export function SheetDialog({
   item,
   onClose,
@@ -24,7 +24,8 @@ export function SheetDialog({
 }) {
   const [sheets, setSheets] = useState<SheetOption[] | null>(null);
   const [mode, setMode] = useState<"replace" | "add">("replace");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [progress, setProgress] = useState("");
   const [sheetName, setSheetName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -50,7 +51,8 @@ export function SheetDialog({
 
   function close() {
     setSheets(null);
-    setFile(null);
+    setFiles([]);
+    setProgress("");
     setSheetName("");
     setMode("replace");
     setError("");
@@ -68,8 +70,8 @@ export function SheetDialog({
   }
 
   async function upload() {
-    if (!item || !file) {
-      setError("올릴 PDF 파일을 골라 주세요.");
+    if (!item || files.length === 0) {
+      setError("올릴 사진이나 파일을 골라 주세요.");
       return;
     }
     setBusy(true);
@@ -77,9 +79,11 @@ export function SheetDialog({
     try {
       const supabase = getBrowserSupabase();
       const replacing = mode === "replace" && item.sheetId;
+      const prepared = await prepareFiles(files, setProgress);
+      setProgress("올리는 중...");
       const uploaded = replacing
-        ? await uploadNewVersion(supabase, item.songId, item.sheetId!, item.sheetName ?? "악보", file)
-        : await uploadNewSheet(supabase, item.songId, sheetName || "악보", file);
+        ? await uploadNewVersion(supabase, item.songId, item.sheetId!, item.sheetName ?? "악보", prepared)
+        : await uploadNewSheet(supabase, item.songId, sheetName.trim() || defaultSheetName(files), prepared);
       const ok = await onChange(item, {
         sheetId: uploaded.sheetId,
         sheetVersion: uploaded.version,
@@ -90,6 +94,7 @@ export function SheetDialog({
       else setBusy(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "올리지 못했습니다.");
+      setProgress("");
       setBusy(false);
     }
   }
@@ -158,7 +163,7 @@ export function SheetDialog({
         )}
 
         <section>
-          <h3 className="label">새 PDF 올리기</h3>
+          <h3 className="label">새 사진이나 파일 올리기</h3>
           <div className="flex flex-col gap-3">
             {item.sheetId && (
               <div role="radiogroup" className="flex flex-col gap-2">
@@ -191,9 +196,9 @@ export function SheetDialog({
                 />
               </div>
             )}
-            <FilePicker file={file} onChange={setFile} onError={setError} disabled={busy} />
-            <button type="button" className="btn btn-primary w-full" disabled={busy || !file} onClick={upload}>
-              {busy ? "올리는 중..." : "올리고 바꾸기"}
+            <AttachmentPicker files={files} onChange={setFiles} onError={setError} disabled={busy} />
+            <button type="button" className="btn btn-primary w-full" disabled={busy || files.length === 0} onClick={upload}>
+              {busy ? progress || "올리는 중..." : "올리고 바꾸기"}
             </button>
           </div>
           <p className="mt-3 px-1 text-[0.9rem] text-muted break-keep">

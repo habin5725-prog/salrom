@@ -71,9 +71,7 @@ async function SettingsContent() {
 
         <section className="card p-5">
           <h2 className="mb-1 text-[1.15rem] font-bold">내 이름</h2>
-          <p className="mb-4 text-[0.95rem] text-muted break-keep">
-            적어 두면 관리자가 접속 기록에서 알아볼 수 있습니다. 적지 않아도 됩니다.
-          </p>
+          <p className="mb-4 text-[1rem] font-semibold text-accent-strong break-keep">꼭 실명으로 등록해 주세요!</p>
           <VisitorNameForm />
         </section>
 

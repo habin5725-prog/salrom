@@ -1,6 +1,7 @@
 import "server-only";
 
 import { formatServiceDate } from "../dates";
+import { kindOfPath } from "../files";
 import { getServerSupabase } from "../supabase/server";
 
 export type ViewerSheet = { sheetId: string; version: number; filePath: string };
@@ -71,7 +72,9 @@ export async function getPlayData(serviceSongId: string): Promise<ViewerData | n
     back: { href: `/services/${service.id}`, label: "곡 목록" },
     prev: before ? { href: `/play/${before.id}`, title: titleOf(before) } : null,
     next: after ? { href: `/play/${after.id}`, title: titleOf(after) } : null,
-    prefetchPaths: after?.sheet_versions ? [after.sheet_versions.file_path] : [],
+    // 다음 곡이 PDF 악보일 때만 미리 받아 둔다(음원이나 문서는 열 때 받는다).
+    prefetchPaths:
+      after?.sheet_versions && kindOfPath(after.sheet_versions.file_path) === "pdf" ? [after.sheet_versions.file_path] : [],
   };
 }
 

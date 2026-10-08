@@ -6,9 +6,9 @@ import { SearchIcon } from "@/components/icons";
 import { KeyPicker } from "@/components/KeyPicker";
 import type { EditorItem } from "@/lib/data/editor";
 import { normalizeForSearch, searchSongs } from "@/lib/hangul";
-import { createSong, uploadNewSheet } from "@/lib/sheet-upload";
+import { createSong, defaultSheetName, prepareFiles, uploadNewSheet } from "@/lib/sheet-upload";
 import { getBrowserSupabase } from "@/lib/supabase/client";
-import { FilePicker } from "./FilePicker";
+import { AttachmentPicker } from "./AttachmentPicker";
 
 type SongOption = {
   id: string;
@@ -18,7 +18,7 @@ type SongOption = {
 
 type Step = "search" | "existing" | "new";
 
-// 악보 선택: 기존 악보 ID, 새 PDF 올리기, 악보 없이
+// 악보 선택: 기존 악보 ID, 새 파일 올리기, 악보 없이
 type SheetChoice = string | "upload" | "none";
 
 export function AddSongDialog({
@@ -39,7 +39,8 @@ export function AddSongDialog({
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<SongOption | null>(null);
   const [sheetChoice, setSheetChoice] = useState<SheetChoice>("none");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [progress, setProgress] = useState("");
   const [sheetName, setSheetName] = useState("악보");
   const [newTitle, setNewTitle] = useState("");
   const [songKey, setSongKey] = useState("");
@@ -67,7 +68,8 @@ export function AddSongDialog({
     setQuery("");
     setSelected(null);
     setSheetChoice("none");
-    setFile(null);
+    setFiles([]);
+    setProgress("");
     setSheetName("악보");
     setNewTitle("");
     setSongKey("");
@@ -84,14 +86,14 @@ export function AddSongDialog({
     const usable = song.sheets.filter((s) => s.current_version > 0);
     setSelected(song);
     setSheetChoice(usable.length > 0 ? usable[usable.length - 1].id : "upload");
-    setFile(null);
+    setFiles([]);
     setError("");
     setStep("existing");
   }
 
   function startNew() {
     setNewTitle(query.trim());
-    setFile(null);
+    setFiles([]);
     setError("");
     setStep("new");
   }
@@ -129,8 +131,8 @@ export function AddSongDialog({
 
   async function addExisting() {
     if (!selected) return;
-    if (sheetChoice === "upload" && !file) {
-      setError("올릴 PDF 파일을 골라 주세요.");
+    if (sheetChoice === "upload" && files.length === 0) {
+      setError("올릴 사진이나 파일을 골라 주세요.");
       return;
     }
     setBusy(true);
@@ -138,8 +140,11 @@ export function AddSongDialog({
     try {
       const supabase = getBrowserSupabase();
       let sheet: { id: string; name: string; version: number } | null = null;
-      if (sheetChoice === "upload" && file) {
-        const uploaded = await uploadNewSheet(supabase, selected.id, sheetName, file);
+      if (sheetChoice === "upload" && files.length > 0) {
+        const prepared = await prepareFiles(files, setProgress);
+        setProgress("올리는 중...");
+        const name = sheetName.trim() === "악보" ? defaultSheetName(files) : sheetName;
+        const uploaded = await uploadNewSheet(supabase, selected.id, name, prepared);
         sheet = { id: uploaded.sheetId, name: uploaded.sheetName, version: uploaded.version };
       } else if (sheetChoice !== "none") {
         const existing = selected.sheets.find((s) => s.id === sheetChoice);
@@ -149,6 +154,7 @@ export function AddSongDialog({
       close();
     } catch (e) {
       setError(e instanceof Error ? e.message : "추가하지 못했습니다.");
+      setProgress("");
       setBusy(false);
     }
   }
@@ -161,7 +167,9 @@ export function AddSongDialog({
     setBusy(true);
     setError("");
     try {
-      const created = await createSong(getBrowserSupabase(), newTitle, file);
+      const prepared = files.length > 0 ? await prepareFiles(files, setProgress) : null;
+      if (prepared) setProgress("올리는 중...");
+      const created = await createSong(getBrowserSupabase(), newTitle, prepared, defaultSheetName(files));
       await insertItem(
         created.songId,
         created.title,
@@ -170,6 +178,7 @@ export function AddSongDialog({
       close();
     } catch (e) {
       setError(e instanceof Error ? e.message : "등록하지 못했습니다.");
+      setProgress("");
       setBusy(false);
     }
   }
@@ -258,8 +267,8 @@ export function AddSongDialog({
               <ChoiceRow
                 checked={sheetChoice === "upload"}
                 onSelect={() => setSheetChoice("upload")}
-                label="새 PDF 올리기"
-                hint="다른 Key 악보 등"
+                label="새 악보나 파일 올리기"
+                hint="다른 Key 악보, 연습 음원 등"
               />
               {sheetChoice === "upload" && (
                 <div className="flex flex-col gap-3 rounded-2xl border border-line p-3">
@@ -276,7 +285,7 @@ export function AddSongDialog({
                       placeholder="예: G키 악보"
                     />
                   </div>
-                  <FilePicker file={file} onChange={setFile} onError={setError} disabled={busy} />
+                  <AttachmentPicker files={files} onChange={setFiles} onError={setError} disabled={busy} />
                 </div>
               )}
               <ChoiceRow checked={sheetChoice === "none"} onSelect={() => setSheetChoice("none")} label="악보 없이 추가" />
@@ -290,7 +299,7 @@ export function AddSongDialog({
 
           {error && <p className="text-danger">{error}</p>}
           <button type="button" className="btn btn-primary w-full" onClick={addExisting} disabled={busy}>
-            {busy ? (sheetChoice === "upload" ? "악보 올리는 중..." : "추가하는 중...") : "이번 주에 추가"}
+            {busy ? (sheetChoice === "upload" ? progress || "올리는 중..." : "추가하는 중...") : "이번 주에 추가"}
           </button>
         </div>
       )}
@@ -320,8 +329,8 @@ export function AddSongDialog({
           </div>
 
           <div>
-            <p className="label">악보 PDF</p>
-            <FilePicker file={file} onChange={setFile} onError={setError} disabled={busy} />
+            <p className="label">악보(사진, PDF, 그 밖의 파일)</p>
+            <AttachmentPicker files={files} onChange={setFiles} onError={setError} disabled={busy} />
             <p className="mt-2 px-1 text-[0.9rem] text-muted">악보는 나중에 올려도 됩니다.</p>
           </div>
 
@@ -336,7 +345,7 @@ export function AddSongDialog({
               뒤로
             </button>
             <button type="button" className="btn btn-primary" onClick={addNew} disabled={busy}>
-              {busy ? (file ? "악보 올리는 중..." : "등록하는 중...") : "등록하고 이번 주에 추가"}
+              {busy ? (files.length > 0 ? progress || "올리는 중..." : "등록하는 중...") : "등록하고 이번 주에 추가"}
             </button>
           </div>
         </div>

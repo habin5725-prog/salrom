@@ -65,8 +65,8 @@ check(
 await visible(page.getByRole("button", { name: "곡 추가" })).click();
 await dialog.getByRole("searchbox").fill("새 노래");
 await dialog.getByRole("button", { name: /새 곡으로 등록/ }).click();
-await dialog.locator("input[type=file]").setInputFiles(`${E}/new-song.pdf`);
-await dialog.getByText("선택한 파일: new-song.pdf").waitFor();
+await dialog.locator("input[type=file]:not([accept])").setInputFiles(`${E}/new-song.pdf`);
+await dialog.getByText("new-song.pdf").waitFor();
 await dialog.getByRole("button", { name: "E", exact: true }).click();
 await page.screenshot({ path: `${OUT}/13-add-new.png` });
 await dialog.getByRole("button", { name: "등록하고 이번 주에 추가" }).click();

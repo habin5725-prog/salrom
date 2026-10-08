@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { SetlistItem } from "@/lib/data/services";
+import { KIND_LABEL } from "@/lib/files";
 
 /** 예배 곡 목록. 각 곡에는 순서, 곡명, Key, 악보 보기만 크게 보여준다. */
 export function Setlist({ songs }: { songs: SetlistItem[] }) {
@@ -28,7 +29,7 @@ export function Setlist({ songs }: { songs: SetlistItem[] }) {
               </span>
             </span>
             {song.sheetId ? (
-              <span className="btn btn-sm btn-soft shrink-0">악보 보기</span>
+              <span className="btn btn-sm btn-soft shrink-0">{KIND_LABEL[song.fileKind ?? "pdf"].open}</span>
             ) : (
               <span className="shrink-0 text-[0.95rem] text-faint">악보 없음</span>
             )}

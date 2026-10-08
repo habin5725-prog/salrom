@@ -37,6 +37,11 @@ function psql(query) {
   return execFileSync("psql", [DB_URL, "-tAc", query]).toString().trim();
 }
 
+/** 올릴 때 받은 파일 형식(예시 데이터 파일은 PDF) */
+function storedType(file) {
+  return fs.existsSync(`${file}.type`) ? fs.readFileSync(`${file}.type`, "utf8") : "application/pdf";
+}
+
 function findUser(where) {
   const row = psql(`select json_build_object('id', id, 'email', email, 'app', raw_app_meta_data, 'meta', raw_user_meta_data) from auth.users where ${where} limit 1`);
   return row ? JSON.parse(row) : null;
@@ -164,6 +169,29 @@ const server = http.createServer(async (req, res) => {
       return send(res, r.status, out, pass);
     }
 
+    // 서명 주소 만들기: POST /object/sign/{bucket}/{path} { expiresIn } → { signedURL }
+    // 서명 주소로 받기: GET /object/sign/{bucket}/{path}?token=...(&download=이름)
+    if (p.startsWith("/storage/v1/object/sign/")) {
+      const rel = decodeURIComponent(p.slice("/storage/v1/object/sign/".length));
+      const file = path.join(STORAGE_DIR, rel);
+      if (!file.startsWith(STORAGE_DIR)) return send(res, 400, { message: "bad path" });
+      if (req.method === "POST") {
+        if (!verify(bearer(req) || req.headers.apikey)) return send(res, 403, { message: "no" });
+        if (!fs.existsSync(file)) return send(res, 404, { statusCode: "404", error: "not_found", message: "Object not found" });
+        const { expiresIn = 60 } = JSON.parse((await readBody(req)).toString() || "{}");
+        const token = sign({ url: rel, exp: Math.floor(Date.now() / 1000) + Number(expiresIn) });
+        return send(res, 200, { signedURL: `/object/sign/${rel}?token=${token}` });
+      }
+      const claims = verify(url.searchParams.get("token"));
+      if (!claims || claims.url !== rel || !fs.existsSync(file)) return send(res, 400, { message: "invalid signature" });
+      const headers = { "Content-Type": storedType(file) };
+      if (url.searchParams.has("download")) {
+        const name = url.searchParams.get("download") || path.basename(file);
+        headers["Content-Disposition"] = `attachment; filename*=UTF-8''${encodeURIComponent(name)}`;
+      }
+      return send(res, 200, fs.readFileSync(file), headers);
+    }
+
     if (p.startsWith("/storage/v1/object/")) {
       const claims = verify(bearer(req) || req.headers.apikey);
       if (!claims) return send(res, 403, { statusCode: "403", error: "Unauthorized", message: "no" });
@@ -171,7 +199,10 @@ const server = http.createServer(async (req, res) => {
       // 여러 파일 지우기: DELETE /object/{bucket} { prefixes: [...] }
       if (req.method === "DELETE") {
         const body = JSON.parse((await readBody(req)).toString() || "{}");
-        for (const prefix of body.prefixes ?? []) fs.rmSync(path.join(STORAGE_DIR, rel, prefix), { force: true });
+        for (const prefix of body.prefixes ?? []) {
+          fs.rmSync(path.join(STORAGE_DIR, rel, prefix), { force: true });
+          fs.rmSync(path.join(STORAGE_DIR, rel, `${prefix}.type`), { force: true });
+        }
         return send(res, 200, []);
       }
       const file = path.join(STORAGE_DIR, rel);
@@ -179,13 +210,36 @@ const server = http.createServer(async (req, res) => {
       if (req.method === "POST" || req.method === "PUT") {
         // 실제 Storage처럼 올리기는 로그인한(리더) 사용자만 허용한다.
         if (claims.role !== "authenticated") return send(res, 403, { statusCode: "403", error: "Unauthorized", message: "no" });
+        // supabase-js 는 Blob 을 multipart 로 보낸다. 파일 부분과 형식만 꺼낸다.
+        const raw = await readBody(req);
+        let bytes = raw;
+        let type = req.headers["content-type"] ?? "application/octet-stream";
+        if (type.startsWith("multipart/form-data")) {
+          const form = await new Response(raw, { headers: { "content-type": type } }).formData();
+          const part = [...form.values()].find((v) => typeof v !== "string");
+          if (!part) return send(res, 400, { message: "no file" });
+          bytes = Buffer.from(await part.arrayBuffer());
+          type = part.type || "application/octet-stream";
+        }
+        // 실제 Storage처럼 버킷의 허용 형식과 크기 한도를 지킨다.
+        const bucket = rel.split("/")[0];
+        const limits = JSON.parse(
+          psql(`select json_build_object('types', allowed_mime_types, 'size', file_size_limit) from storage.buckets where id = ${sqlText(bucket)}`) || "{}",
+        );
+        if (limits.types && !limits.types.includes(type.split(";")[0])) {
+          return send(res, 415, { statusCode: "415", error: "invalid_mime_type", message: `mime type ${type} is not supported` });
+        }
+        if (limits.size && bytes.length > limits.size) {
+          return send(res, 413, { statusCode: "413", error: "Payload too large", message: "The object exceeded the maximum allowed size" });
+        }
         fs.mkdirSync(path.dirname(file), { recursive: true });
-        fs.writeFileSync(file, await readBody(req));
+        fs.writeFileSync(file, bytes);
+        fs.writeFileSync(`${file}.type`, type);
         return send(res, 200, { Key: rel, Id: crypto.randomUUID() });
       }
       if (req.method === "GET") {
         if (!fs.existsSync(file)) return send(res, 404, { statusCode: "404", error: "not_found", message: "Object not found" });
-        return send(res, 200, fs.readFileSync(file), { "Content-Type": "application/pdf" });
+        return send(res, 200, fs.readFileSync(file), { "Content-Type": storedType(file) });
       }
     }
 

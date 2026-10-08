@@ -152,3 +152,25 @@ export const SearchIcon = (p: IconProps) => (
     <path d="m21 21-4.3-4.3" />
   </Icon>
 );
+
+export const CameraIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+    <circle cx="12" cy="13" r="3.5" />
+  </Icon>
+);
+
+export const ImageIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="1.8" />
+    <path d="m4 18 5-5 4 4 3-3 4 4" />
+  </Icon>
+);
+
+export const FileIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M6 3h8l5 5v13H6z" />
+    <path d="M14 3v5h5" />
+  </Icon>
+);
