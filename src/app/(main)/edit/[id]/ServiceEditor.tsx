@@ -201,12 +201,10 @@ export function ServiceEditor({ initial }: { initial: EditorService }) {
             <span className="badge bg-amber-100 text-amber-800">초안 · 팀원에게 아직 안 보임</span>
           )}
         </div>
-        <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => setInfoOpen(true)}>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[1.35rem] font-bold">{formatServiceDate(service.date, { withYear: true })}</span>
-            <span className="block text-muted">{service.title}</span>
-          </span>
-          <span className="btn btn-sm btn-secondary">날짜·이름 바꾸기</span>
+        <p className="text-[1.35rem] font-bold break-keep">{formatServiceDate(service.date, { withYear: true })}</p>
+        <p className="text-muted">{service.title}</p>
+        <button type="button" className="btn btn-sm btn-secondary mt-3" onClick={() => setInfoOpen(true)}>
+          날짜·이름 바꾸기
         </button>
       </section>
 
