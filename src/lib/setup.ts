@@ -38,10 +38,10 @@ export async function getSetupState(): Promise<SetupState> {
 
 export function databaseUrl(): string {
   return (
-    process.env.POSTGRES_URL_NON_POOLING ??
-    process.env.POSTGRES_URL ??
-    process.env.SUPABASE_DB_URL ??
-    process.env.DATABASE_URL ??
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.POSTGRES_URL ||
+    process.env.SUPABASE_DB_URL ||
+    process.env.DATABASE_URL ||
     ""
   );
 }
@@ -64,7 +64,7 @@ export async function runSchemaSetup(): Promise<{ ok: boolean; message: string }
   if (!url) {
     return {
       ok: false,
-      message: "데이터베이스 주소가 없어 자동으로 준비할 수 없습니다. 안내서의 'SQL 직접 실행' 방법을 따라 주세요.",
+      message: "데이터베이스 주소가 없어 자동으로 준비할 수 없습니다. 안내서(README) 3-4의 SQL Editor 방법을 따라 주세요.",
     };
   }
 

@@ -6,7 +6,7 @@ import { SUPABASE_URL } from "./env";
 
 /** 서버 전용 키(새 이름 SUPABASE_SECRET_KEY 또는 예전 이름 SUPABASE_SERVICE_ROLE_KEY) */
 export function serverSecretKey(): string {
-  return process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  return process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 }
 
 /**
