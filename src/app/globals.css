@@ -1,26 +1,133 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* 색은 밝은 배경 + 강조색 1개(청록)로 제한한다. 필기 색(파랑=개인, 빨강=공용)은 강조색과 겹치지 않게 둔다. */
+@theme {
+  --color-page: #f6f5f3;
+  --color-surface: #ffffff;
+  --color-ink: #1c1917;
+  --color-muted: #57534e;
+  --color-faint: #a8a29e;
+  --color-line: #e7e5e4;
+  --color-accent: #0f766e;
+  --color-accent-strong: #115e59;
+  --color-accent-soft: #e6f4f1;
+  --color-danger: #b91c1c;
+  --color-personal: #1d4ed8;
+  --color-global: #dc2626;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR",
+    "Malgun Gothic", "Segoe UI", sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* 40대 사용자 기준으로 기본 글자 크기를 키운다(17px). */
+html {
+  font-size: 17px;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 3.25rem;
+    padding: 0 1.25rem;
+    border-radius: 0.875rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    transition: background-color 0.15s, opacity 0.15s;
+    user-select: none;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+  }
+  .btn-primary {
+    background: var(--color-accent);
+    color: #fff;
+  }
+  .btn-primary:active {
+    background: var(--color-accent-strong);
+  }
+  .btn-secondary {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border: 1px solid var(--color-line);
+  }
+  .btn-secondary:active {
+    background: var(--color-page);
+  }
+  .btn-soft {
+    background: var(--color-accent-soft);
+    color: var(--color-accent-strong);
+  }
+  .btn-danger {
+    background: var(--color-surface);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+  .btn-sm {
+    min-height: 2.75rem;
+    padding: 0 0.9rem;
+    font-size: 0.95rem;
+    border-radius: 0.75rem;
+  }
+
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 1.25rem;
+  }
+
+  /* 16px 이상이어야 iPhone에서 입력할 때 화면이 확대되지 않는다. */
+  .input {
+    width: 100%;
+    min-height: 3.25rem;
+    padding: 0 1rem;
+    border: 1px solid #d6d3d1;
+    border-radius: 0.875rem;
+    background: var(--color-surface);
+    font-size: 1.05rem;
+  }
+  .input:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+
+  .label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+}
+
+/* 하단 메뉴가 화면 아래 안전 영역(iPhone 홈 바)을 피하도록 */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top);
 }

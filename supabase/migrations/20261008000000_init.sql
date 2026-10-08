@@ -157,6 +157,8 @@ create table public.services (
   title text not null default '주일예배' check (char_length(title) between 1 and 60),
   status public.service_status not null default 'draft',
   published_at timestamptz,
+  -- 마지막으로 팀원에게 알림을 보낸 시각. 같은 알림이 연달아 나가지 않게 막는 데 쓴다.
+  notified_at timestamptz,
   created_by uuid default auth.uid() references public.profiles (id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
