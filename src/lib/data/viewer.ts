@@ -68,7 +68,7 @@ export async function getPlayData(serviceSongId: string): Promise<ViewerData | n
         ? { sheetId: row.sheet_id, version: row.sheet_version, filePath: row.sheet_versions.file_path }
         : null,
     olderVersion: false,
-    back: { href: `/services/${service.id}`, label: "순서" },
+    back: { href: `/services/${service.id}`, label: "곡 목록" },
     prev: before ? { href: `/play/${before.id}`, title: titleOf(before) } : null,
     next: after ? { href: `/play/${after.id}`, title: titleOf(after) } : null,
     prefetchPaths: after?.sheet_versions ? [after.sheet_versions.file_path] : [],

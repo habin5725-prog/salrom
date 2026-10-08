@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ServiceDetail } from "@/components/ServiceDetail";
 import { getMember } from "@/lib/auth";
 import { getService } from "@/lib/data/services";
+import { todayISO } from "@/lib/dates";
 import { canEditServices } from "@/lib/permissions";
 
 // 알림을 누르면 이 화면으로 온다.
@@ -26,7 +27,10 @@ async function ServiceContent({ params }: { params: PageProps<"/services/[id]">[
 
   return (
     <>
-      <PageHeader title={service.title} back={{ href: "/history", label: "지난 예배" }} />
+      <PageHeader
+        title={service.title}
+        back={service.date < todayISO() ? { href: "/history", label: "지난 예배" } : { href: "/", label: "홈" }}
+      />
       <ServiceDetail service={service} canEdit={canEditServices(user.role)} />
     </>
   );
